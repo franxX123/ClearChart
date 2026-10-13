@@ -1,0 +1,15 @@
+hostName,hostInterface,hostIP,hostPlatform,neighborName,neighborInterface,neighborIP,neighborPlatform,speed
+core1,Eth1/1,10.0.0.1,Nexus 9300,dist1,Te1/1/1,10.0.1.1,C9500,10G
+core1,Eth1/2,10.0.0.1,Nexus 9300,dist1,Te1/1/2,10.0.1.1,C9500,10G
+core1,Eth1/3,10.0.0.1,Nexus 9300,dist2,Te1/1/1,10.0.1.2,C9500,10G
+core2,Eth1/1,10.0.0.2,Nexus 9300,dist1,Te1/1/3,10.0.1.1,C9500,10G
+core2,Eth1/3,10.0.0.2,Nexus 9300,dist2,Te1/1/3,10.0.1.2,C9500,10G
+core1,Eth1/49,10.0.0.1,Nexus 9300,core2,Eth1/49,10.0.0.2,Nexus 9300,40G
+dist1,Te1/1/1,10.0.1.1,C9500,core1,Eth1/1,10.0.0.1,Nexus 9300,10G
+dist2,Te1/1/1,10.0.1.2,C9500,core1,Eth1/3,10.0.0.1,Nexus 9300,10G
+dist1,Gi1/0/10,10.0.1.1,C9500,access1,Gi1/0/48,10.0.2.11,C9200,1G
+dist1,Gi1/0/11,10.0.1.1,C9500,access2,Gi1/0/48,10.0.2.12,C9200,1G
+dist2,Gi1/0/10,10.0.1.2,C9500,access3,Gi1/0/48,10.0.2.13,C9200,1G
+dist2,Gi1/0/11,10.0.1.2,C9500,access4,Gi1/0/48,10.0.2.14,C9200,1G
+access1,Gi1/0/48,10.0.2.11,C9200,dist1,Gi1/0/10,10.0.1.1,C9500,1G
+,Gi0/1,,,orphan,Gi0/2,,,
