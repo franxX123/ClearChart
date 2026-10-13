@@ -1,9 +1,20 @@
-import { localToWorld, pointInShape, rectCenter, rotateDir, rotationOf, shapeBox, worldToLocal } from '../canvas/transform';
+import {
+  attachFrame,
+  localRectBox,
+  localToWorld,
+  pointInShape,
+  rectCenter,
+  rotateDir,
+  rotationOf,
+  shapeBox,
+  shapeExtent,
+  worldToLocal,
+} from '../canvas/transform';
 import { isShape } from '../model/doc';
 import { isInteractive, isVisible, renderOrder } from '../model/page';
 import type { Connector, Endpoint, Page, Point, Rect, Shape } from '../model/types';
-import { SHAPES } from '../shapes/library';
-import { bindPoint, nearestOnPolygon, pinnedDir, pinnedPoint } from './binding';
+import { SHAPES, type PortDef } from '../shapes/library';
+import { bindPoint, localFrame, localOutline, nearestOnPolygon, pinnedDir, pinnedPoint } from './binding';
 
 export interface Anchor {
   p: Point;
@@ -25,10 +36,31 @@ const EPS = 0.5;
 
 const dist2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 
+/**
+ * A shape's ports in its local frame: its kind's ports, or for a shape with text beside it, the
+ * middles of the sides of the rectangle around the shape and its text (top/right/bottom/left).
+ */
+function localPorts(s: Shape): PortDef[] {
+  const f = attachFrame(s);
+  if (!f) return SHAPES[s.kind].ports(s.w, s.h);
+  return [
+    { x: f.x + f.w / 2, y: f.y, dir: { x: 0, y: -1 } },
+    { x: f.x + f.w, y: f.y + f.h / 2, dir: { x: 1, y: 0 } },
+    { x: f.x + f.w / 2, y: f.y + f.h, dir: { x: 0, y: 1 } },
+    { x: f.x, y: f.y + f.h / 2, dir: { x: -1, y: 0 } },
+  ];
+}
+
+/** World bounds of what a line attached to `s` leaves from (its box, with any text beside it). */
+const attachBox = (s: Shape): Rect => {
+  const f = attachFrame(s);
+  return f ? localRectBox(s, f) : shapeBox(s);
+};
+
 /** A shape's ports in world coordinates. On a rotated shape, directions snap to the nearest axis. */
 export function shapePorts(s: Shape): Anchor[] {
   const rot = rotationOf(s);
-  return SHAPES[s.kind].ports(s.w, s.h).map((pt) => ({ p: localToWorld(s, pt), dir: rotateDir(pt.dir, rot) }));
+  return localPorts(s).map((pt) => ({ p: localToWorld(s, pt), dir: rotateDir(pt.dir, rot) }));
 }
 
 /** Rough position of an end, used to pick the facing port on the other end. */
@@ -46,12 +78,21 @@ function anchorGuess(page: Page, ep: Endpoint): Point {
 export function resolveEndpoint(page: Page, ep: Endpoint, towards: Point): Anchor {
   const s = ep.shapeId ? page.items[ep.shapeId] : undefined;
   if (!isShape(s)) return { p: { x: ep.x, y: ep.y }, dir: null };
-  const box = shapeBox(s);
+  const box = attachBox(s);
   if (ep.at) return { p: pinnedPoint(s, ep.at), dir: pinnedDir(s, ep.at), box };
-  // Legacy ends from before pinned arrows: a fixed port, or the port facing the other end.
+  // A fixed port (files from before pinned arrows), or floating: the port facing the other end.
   const ports = shapePorts(s);
   if (ep.port != null && ports[ep.port]) return { ...ports[ep.port], box };
-  return { ...ports.reduce((best, pt) => (dist2(pt.p, towards) < dist2(best.p, towards) ? pt : best)), box };
+  return { ...ports[floatingPort(ports, towards)], box };
+}
+
+/** The port a floating end uses: the one nearest `towards`. */
+function floatingPort(ports: Anchor[], towards: Point): number {
+  let best = 0;
+  ports.forEach((pt, i) => {
+    if (dist2(pt.p, towards) < dist2(ports[best].p, towards)) best = i;
+  });
+  return best;
 }
 
 /** Direction along the dominant axis from `from` toward `to`. */
@@ -310,12 +351,12 @@ export function elbowRoute(a: Anchor, b: Anchor, obstacles: Rect[] = []): Point[
   return path ? simplify([a.p, ...path, b.p]) : direct;
 }
 
-/** Bounds of the visible shapes on a page: what elbow lines route around. */
+/** Bounds of the visible shapes on a page (with any text beside them): what elbow lines route around. */
 export function routeObstacles(page: Page): Rect[] {
   return page.order
     .map((id) => page.items[id])
     .filter((it): it is Shape => isShape(it) && isVisible(page, it))
-    .map(shapeBox);
+    .map(shapeExtent);
 }
 
 /** Unit normal of the chord a→b (pointing left of the direction of travel, y down), or null if a = b. */
@@ -434,7 +475,7 @@ function floatingSlots(page: Page): Map<string, Slot> {
       const towards = anchorGuess(page, end === 'source' ? c.target : c.source);
       const ports = shapePorts(s);
       if (!ports.length) continue;
-      const port = ports.reduce((best, pt, i) => (dist2(pt.p, towards) < dist2(ports[best].p, towards) ? i : best), 0);
+      const port = floatingPort(ports, towards);
       const gk = `${s.id}:${port}`;
       if (!groups.has(gk)) groups.set(gk, []);
       groups.get(gk)!.push({ key: slotKey(c.id, end), towards, shape: s, port });
@@ -444,7 +485,7 @@ function floatingSlots(page: Page): Map<string, Slot> {
   for (const members of groups.values()) {
     if (members.length < 2) continue;
     const { shape: s, port } = members[0];
-    const def = SHAPES[s.kind].ports(s.w, s.h)[port];
+    const def = localPorts(s)[port];
     const tangent = { x: -def.dir.y, y: def.dir.x };
     // Order along the side by where each line is heading, in the shape's own (unrotated) frame.
     const along = (p: Point) => {
@@ -452,10 +493,11 @@ function floatingSlots(page: Page): Map<string, Slot> {
       return l.x * tangent.x + l.y * tangent.y;
     };
     members.sort((a, b) => along(a.towards) - along(b.towards));
-    const side = tangent.x !== 0 ? s.w : s.h;
+    const frame = localFrame(s);
+    const side = tangent.x !== 0 ? frame.w : frame.h;
     const spacing = Math.min(SLOT_SPACING, (side * 0.8) / (members.length - 1));
-    const outline = SHAPES[s.kind].outline(s.w, s.h);
-    const anchorBase = { dir: rotateDir(def.dir, rotationOf(s)), box: shapeBox(s) };
+    const outline = localOutline(s);
+    const anchorBase = { dir: rotateDir(def.dir, rotationOf(s)), box: attachBox(s) };
     members.forEach((m, i) => {
       const off = (i - (members.length - 1) / 2) * spacing;
       // Keep the spread points on the shape's edge (it may not be straight, e.g. an ellipse).
@@ -508,8 +550,9 @@ export function polylineMidpoint(pts: Point[]): Point {
 }
 
 /**
- * Where a dragged arrow end attaches: pinned to the topmost selectable shape within `snap` of
- * `p` (onto its outline when that close to it, else exactly at `p`), or nowhere.
+ * Where a dragged arrow end attaches: pinned to the topmost selectable shape (including any text
+ * beside it) within `snap` of `p` (onto its outline when that close to it, else exactly at
+ * `p`), or nowhere.
  */
 export function findAttachment(page: Page, p: Point, snap: number): Endpoint | null {
   const order = renderOrder(page);

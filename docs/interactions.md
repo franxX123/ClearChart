@@ -198,15 +198,24 @@ clears `autoSize`, turning it into a fixed box whose text wraps.
   carrying the `LIBRARY` index; `onDrop` adds the shape centered at the drop point. Clicking a
   tile adds it at the viewport center.
 - **Graphs (templates):** the shape panel's Graphs section lists `Doc.templates`; new
-  documents (and ones saved before templates existed) start with `defaultTemplates()` — a
-  Device node and a Link line (`model/doc.ts`). A node
+  documents (and ones saved before templates existed) start with `defaultTemplates()` — the
+  built-in device picture elements and a Link line (`model/doc.ts`). Picture elements show their
+  picture as the tile; the default element has a *default* badge; the tooltip lists its
+  platform rules. **+ Device picture** asks for an image (`pickImageFile` → `readImageFile`),
+  makes an element from it (`addDeviceTemplate`, named after the file, at most 96 px) and opens
+  its editor. **Add built-in devices** appears while any built-in element (matched by name) is
+  missing and runs `addBuiltInDevices`. A node
   template tile adds a node at the view center on click, or at the drop point when dragged
   (MIME payload `template:<id>`, see `TEMPLATE_DRAG_PREFIX`). A line template tile picks it for
   the Arrow tool (`setArrowTemplate`); new arrows are then made from it until the tool returns
   to Select. The ⋯ button opens the template editor (name, text/labels with `{fields}`, *Use
-  the look of the selected item*, Delete).
-- **Import CSV** (toolbar): file picker → `ImportDialog` (preview counts and skipped rows,
-  template choice) → `importLinks`. Dialogs are opened through `ui/dialogState.ts` and rendered
+  the look of the selected item*, Delete). For node elements it also edits the picture
+  (*Add / Change / Remove picture*), the platform rules (comma-separated), whether it's the
+  default, and, for box elements, whether the text is inside or to the right. A picture change is held
+  in the dialog until Save, and Save applies everything in one history batch (one undo step).
+- **Import CSV** (toolbar): file picker → `ImportDialog` (preview counts, new devices per
+  element, skipped rows; the element for devices matching no rule, which becomes the default;
+  the line template) → `importLinks`. Dialogs are opened through `ui/dialogState.ts` and rendered
   by `ui/Dialogs.tsx`; `Modal` stops key propagation so global shortcuts don't fire.
 - **Templates from the canvas:** right-click one shape or line → *Save as node/line
   template…*; on a templated item → *Edit template…* / *Update template from this item*
@@ -216,6 +225,11 @@ clears `autoSize`, turning it into a fixed box whose text wraps.
 - **Pictures:** the sidebar's Image tile opens a file picker (`io/image.ts:pickImageFile`);
   `readImageFile` turns the file into a data URL (see `architecture.md`) and `addImage` puts it
   at the viewport center, at most 400 px on its longer side.
+- **Text beside a device:** the text is part of the device. Clicking it selects the device
+  (its hit rect is inside the shape's group). Dropping an arrow end on it attaches there:
+  attaching tests the attach frame (box plus text), and the hover highlight shows that whole
+  frame. Double-click edits the text in place to the right of the shape, but only for unlinked
+  devices (a linked device's text comes from its element and fields).
 
 ## Keyboard shortcuts (`src/ui/shortcuts.ts`)
 

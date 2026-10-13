@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { pinnedPoint } from '../connectors/binding';
+import { localFrame, pinnedPoint } from '../connectors/binding';
 import { ConnectorView } from '../connectors/ConnectorView';
 import {
   bendThrough,
@@ -10,7 +10,7 @@ import {
   findAttachment,
   routeObstacles,
 } from '../connectors/routing';
-import { isConnector, isShape } from '../model/doc';
+import { isConnector, isShape, shapeImageSrc } from '../model/doc';
 import { expandGroups, isVisible, layerBuckets, outerGroup } from '../model/page';
 import { currentPage, useStore, type Viewport } from '../model/store';
 import type { Endpoint, Point, Rect } from '../model/types';
@@ -78,6 +78,7 @@ export function Canvas() {
   const vp = useStore((s) => s.viewport);
   const editingId = useStore((s) => s.editingId);
   const showGrid = useStore((s) => s.showGrid);
+  const assets = useStore((s) => s.doc.assets);
   const tool = useStore((s) => s.tool);
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -499,6 +500,8 @@ export function Canvas() {
   const attachShape = attachHint?.shapeId ? page.items[attachHint.shapeId] : undefined;
   const attachBody = isShape(attachShape) ? attachShape : null;
   const attachPoint = attachBody && attachHint?.at ? pinnedPoint(attachBody, attachHint.at) : null;
+  // The area that end attaches to, in the shape's frame: the shape, with any text beside it.
+  const attachArea = attachBody ? localFrame(attachBody) : null;
   const single = selectedShapes.length === 1 && selection.length === 1 && !editingId ? selectedShapes[0] : null;
   const curved =
     selectedConnectors.length === 1 && selection.length === 1 && selectedConnectors[0].routing === 'curved'
@@ -571,7 +574,15 @@ export function Canvas() {
                   {buckets.get(layer.id)!.map((id) => {
                     const it = page.items[id];
                     if (isShape(it))
-                      return <ShapeView key={id} shape={it} hideText={editingId === id} locked={layer.locked} />;
+                      return (
+                        <ShapeView
+                          key={id}
+                          shape={it}
+                          hideText={editingId === id}
+                          locked={layer.locked}
+                          imageSrc={shapeImageSrc(it, assets)}
+                        />
+                      );
                     if (isConnector(it))
                       return (
                         <ConnectorView
@@ -620,11 +631,13 @@ export function Canvas() {
               />
             ))}
 
-            {attachBody && (
+            {attachBody && attachArea && (
               <rect
                 transform={shapeTransform(attachBody)}
-                width={attachBody.w}
-                height={attachBody.h}
+                x={attachArea.x}
+                y={attachArea.y}
+                width={attachArea.w}
+                height={attachArea.h}
                 fill="rgba(47,111,235,0.08)"
                 stroke={SELECT_COLOR}
                 strokeWidth={2 / z}

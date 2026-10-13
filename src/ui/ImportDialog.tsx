@@ -12,8 +12,9 @@ export function ImportDialog({ fileName, csv, onClose }: { fileName: string; csv
   const templates = useStore((s) => s.doc.templates);
   const doc = useStore((s) => s.doc);
   const activePage = useStore((s) => s.activePageId);
-  // Default to the most recently made template of each kind.
-  const [nodeTemplateId, setNodeTemplateId] = useState(templates?.nodes.at(-1)?.id ?? '');
+  // Devices get the element their platform matches; the rest get the default element (or this choice).
+  const [nodeTemplateId, setNodeTemplateId] = useState(templates?.defaultNodeId ?? templates?.nodes[0]?.id ?? '');
+  // Links: the most recently made line template.
   const [lineTemplateId, setLineTemplateId] = useState(templates?.lines.at(-1)?.id ?? '');
   const opts = { nodeTemplateId, lineTemplateId };
 
@@ -65,6 +66,9 @@ export function ImportDialog({ fileName, csv, onClose }: { fileName: string; csv
             <li>
               <b>Devices:</b> {summary!.devicesNew} new, {summary!.devicesExisting} already on this page
               {summary!.devicesUpdated > 0 && ` (${summary!.devicesUpdated} with updated fields)`}
+              {summary!.byTemplate.length > 0 && (
+                <div className="muted">New: {summary!.byTemplate.map((b) => `${b.count} × ${b.name}`).join(', ')}</div>
+              )}
             </li>
             <li>
               <b>Links:</b> {summary!.linksNew} new, {summary!.linksExisting} already drawn
@@ -86,7 +90,7 @@ export function ImportDialog({ fileName, csv, onClose }: { fileName: string; csv
           </ul>
           {nothingNew && <p className="muted">Everything in this file is already on the page.</p>}
           <label className="field">
-            <span>Devices look like</span>
+            <span>Devices whose platform matches no rule look like</span>
             <select value={nodeTemplateId} onChange={(e) => setNodeTemplateId(e.target.value)}>
               {templates?.nodes.length ? (
                 templates.nodes.map((t) => (
@@ -95,10 +99,14 @@ export function ImportDialog({ fileName, csv, onClose }: { fileName: string; csv
                   </option>
                 ))
               ) : (
-                <option value="">Device (default)</option>
+                <option value="">Generic device (default)</option>
               )}
             </select>
           </label>
+          <p className="muted hint-small">
+            Each device gets the element whose platform rule its hostPlatform matches (edit an element in Graphs → ⋯ to
+            change its rules). The choice above becomes the default element.
+          </p>
           <label className="field">
             <span>Links look like</span>
             <select value={lineTemplateId} onChange={(e) => setLineTemplateId(e.target.value)}>

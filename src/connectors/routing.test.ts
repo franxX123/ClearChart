@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { addItems, makeConnector, makeShape } from '../model/doc';
 import { makeLayer, makePage } from '../model/page';
 import type { Point, Rect } from '../model/types';
+import { attachFrame, localRectBox, sideLabelBox } from '../canvas/transform';
+import { pinnedDir, pinnedPoint } from './binding';
 import {
   bendThrough,
   connectorPoints,
@@ -301,5 +303,68 @@ describe('obstacle routing', () => {
       { x: -20, y: 10, w: 40, h: 10 },
     ];
     expect(orthogonalPath({ x: 0, y: 0 }, null, { x: 100, y: 0 }, null, cage)).toBeNull();
+  });
+});
+
+describe('shapes with text beside them', () => {
+  /** A 56×40 device at the origin with its name to its right. */
+  const device = () => {
+    const s = makeShape('image', { x: 0, y: 0, w: 56, h: 40 }, 'a-long-hostname\n10.0.0.1', { fontSize: 12 });
+    s.textPosition = 'right';
+    return s;
+  };
+
+  it('arrows attach to the text as well as the picture', () => {
+    const doc = makePage();
+    const hub = device();
+    addItems(doc, [hub]);
+    const label = sideLabelBox(hub)!;
+    const frame = attachFrame(hub)!;
+    expect(findAttachment(doc, { x: 28, y: 20 }, 8)?.shapeId).toBe(hub.id);
+    // Dropped on the middle of the text: pinned right there (beyond the picture's own box).
+    const mid = { x: label.x + label.w / 2, y: 20 };
+    const onText = findAttachment(doc, mid, 4)!;
+    expect(onText.shapeId).toBe(hub.id);
+    expect(onText.at!.x).toBeGreaterThan(1);
+    expect(pinnedPoint(hub, onText.at!)).toEqual(mid);
+    // Dropped near the text's right edge: snapped onto it, leaving rightward.
+    const edge = findAttachment(doc, { x: frame.w - 3, y: 12 }, 8)!;
+    expect(pinnedPoint(hub, edge.at!).x).toBeCloseTo(frame.w);
+    expect(pinnedDir(hub, edge.at!)).toEqual({ x: 1, y: 0 });
+    // It follows the device when the device moves.
+    hub.x += 100;
+    expect(pinnedPoint(hub, onText.at!)).toEqual({ x: mid.x + 100, y: 20 });
+    // Past the text: nothing.
+    expect(findAttachment(doc, { x: 100 + frame.w + 30, y: 20 }, 8)).toBeNull();
+  });
+
+  it('floating ends use the sides of the picture and its text together', () => {
+    const doc = makePage();
+    const hub = device();
+    const right = makeShape('rect', { x: 600, y: -5, w: 50, h: 50 });
+    const under = makeShape('rect', { x: 0, y: 400, w: 50, h: 50 });
+    addItems(doc, [hub, right, under]);
+    const frame = attachFrame(hub)!;
+    const toRight = makeConnector({ shapeId: hub.id, x: 0, y: 0 }, { shapeId: right.id, x: 0, y: 0 });
+    const toUnder = makeConnector({ shapeId: hub.id, x: 0, y: 0 }, { shapeId: under.id, x: 0, y: 0 });
+    addItems(doc, [toRight, toUnder]);
+    // To the right: from the text's right edge, not from the picture under the text.
+    expect(connectorPoints(doc, toRight)[0]).toEqual({ x: frame.w, y: 20 });
+    // Downward: from the middle of the bottom of picture + text.
+    expect(connectorPoints(doc, toUnder)[0]).toEqual({ x: frame.w / 2, y: 40 });
+  });
+
+  it('elbow lines route around the device and its text', () => {
+    const doc = makePage();
+    const hub = device();
+    const a = makeShape('rect', { x: -300, y: -5, w: 100, h: 50 });
+    const b = makeShape('rect', { x: 400, y: -5, w: 100, h: 50 });
+    addItems(doc, [hub, a, b]);
+    // Straight across at y = 20 would run through the picture and its text.
+    const c = makeConnector({ shapeId: a.id, port: 1, x: 0, y: 0 }, { shapeId: b.id, port: 3, x: 0, y: 0 });
+    addItems(doc, [c]);
+    const pts = connectorPoints(doc, c);
+    expect(isOrthogonal(pts)).toBe(true);
+    expect(crosses(pts, localRectBox(hub, attachFrame(hub)!))).toBe(false);
   });
 });

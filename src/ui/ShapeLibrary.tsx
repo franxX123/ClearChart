@@ -3,6 +3,7 @@ import { SHAPE_DRAG_MIME, TEMPLATE_DRAG_PREFIX } from '../canvas/Canvas';
 import { pickImageFile, readImageFile } from '../io/image';
 import { useStore } from '../model/store';
 import type { LineTemplate, NodeTemplate } from '../model/types';
+import { BUILT_IN_DEVICES } from '../shapes/deviceIcons';
 import { LIBRARY, SHAPES, type LibraryEntry } from '../shapes/library';
 import { useDialog } from './dialogState';
 
@@ -56,8 +57,29 @@ async function addImageFromDevice() {
   }
 }
 
-/** Preview of a node template: its shape, in its colors. */
-function NodeThumb({ t }: { t: NodeTemplate }) {
+/** Asks for a picture and makes a device element from it (named after the file), then opens its editor. */
+async function addDevicePicture() {
+  const file = await pickImageFile();
+  if (!file) return;
+  try {
+    const img = await readImageFile(file);
+    const name = file.name.replace(/\.[^.]+$/, '').trim() || 'Device';
+    const id = useStore.getState().addDeviceTemplate(name, img.src, img.w, img.h);
+    useDialog.getState().open({ kind: 'editTemplate', templateId: id });
+  } catch (err) {
+    alert(`Couldn't add the picture: ${(err as Error).message}`);
+  }
+}
+
+/** Preview of a node template: its picture, or its shape in its colors. */
+function NodeThumb({ t, src }: { t: NodeTemplate; src?: string }) {
+  if (src) {
+    return (
+      <svg viewBox="0 0 44 32" width={44} height={32}>
+        <image href={src} width={44} height={32} preserveAspectRatio="xMidYMid meet" />
+      </svg>
+    );
+  }
   const pad = 3;
   const fill = t.style.fill === 'none' ? 'transparent' : t.style.fill;
   const stroke = t.style.stroke === 'none' ? 'currentColor' : t.style.stroke;
@@ -86,13 +108,29 @@ function LineThumb({ t }: { t: LineTemplate }) {
  */
 function GraphTemplates({ query }: { query: string }) {
   const templates = useStore((s) => s.doc.templates);
+  const assets = useStore((s) => s.doc.assets);
   const arrowTemplateId = useStore((s) => s.arrowTemplateId);
   const tool = useStore((s) => s.tool);
   const match = (name: string) => name.toLowerCase().includes(query);
   const nodes = templates?.nodes.filter((t) => match(t.name)) ?? [];
   const lines = templates?.lines.filter((t) => match(t.name)) ?? [];
+  const defaultId = templates?.defaultNodeId ?? templates?.nodes[0]?.id;
+  const names = new Set(templates?.nodes.map((t) => t.name.trim().toLowerCase()));
+  const missingBuiltIns = BUILT_IN_DEVICES.some((d) => !names.has(d.name.toLowerCase()));
   const edit = (templateId: string) => useDialog.getState().open({ kind: 'editTemplate', templateId });
   if (query && !nodes.length && !lines.length) return null;
+
+  const tip = (t: NodeTemplate) => {
+    const rules = (t.platforms ?? []).filter((r) => r.trim());
+    return [
+      t.name,
+      rules.length ? `Devices whose platform contains: ${rules.join(', ')}` : '',
+      t.id === defaultId ? 'Default for devices matching no rule' : '',
+      'Click or drag onto the canvas',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  };
 
   return (
     <section>
@@ -107,7 +145,7 @@ function GraphTemplates({ query }: { query: string }) {
             <div key={t.id} className="template-tile">
               <button
                 className="shape-tile"
-                title={`${t.name} — click or drag onto the canvas`}
+                title={tip(t)}
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData(SHAPE_DRAG_MIME, `${TEMPLATE_DRAG_PREFIX}${t.id}`);
@@ -115,9 +153,10 @@ function GraphTemplates({ query }: { query: string }) {
                 }}
                 onClick={() => useStore.getState().addFromTemplate(t.id, viewCenter())}
               >
-                <NodeThumb t={t} />
+                <NodeThumb t={t} src={t.image ? assets?.[t.image.asset] : undefined} />
                 <span>{t.name}</span>
               </button>
+              {t.id === defaultId && <span className="tile-badge">default</span>}
               <button className="tile-menu" title={`Edit ${t.name}`} aria-label={`Edit template ${t.name}`} onClick={() => edit(t.id)}>
                 ⋯
               </button>
@@ -142,6 +181,21 @@ function GraphTemplates({ query }: { query: string }) {
               </div>
             );
           })}
+        </div>
+      )}
+      {!query && (
+        <div className="graph-actions">
+          <button title="Make a device element from a picture on this computer" onClick={addDevicePicture}>
+            + Device picture
+          </button>
+          {missingBuiltIns && (
+            <button
+              title="Add the built-in device elements (switch, router, firewall…) and apply their platform rules to imported devices"
+              onClick={() => useStore.getState().addBuiltInDevices()}
+            >
+              Add built-in devices
+            </button>
+          )}
         </div>
       )}
     </section>

@@ -586,3 +586,56 @@ button.danger {
   padding: 3px 5px;
   background: var(--panel);
 }
+
+/* Device pictures in the Graphs panel and the element editor */
+.template-tile .tile-badge {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.graph-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.graph-actions button {
+  font-size: 11px;
+  padding: 3px 7px;
+}
+.picture-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.picture-preview {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 11px;
+}
+.picture-preview img {
+  max-width: 56px;
+  max-height: 56px;
+}
+.picture-row .btn-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}

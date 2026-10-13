@@ -1,8 +1,8 @@
 import { nanoid } from 'nanoid';
 import { fitText } from '../canvas/text';
 import { SHAPES } from '../shapes/library';
-import { makeConnector, makeShape } from './doc';
-import type { Connector, Endpoint, LineTemplate, NodeTemplate, Point, Shape, ShapeKind, ShapeStyle } from './types';
+import { DEVICE_FIELDS_TEXT, makeConnector, makeShape } from './doc';
+import type { Connector, Endpoint, LineTemplate, NodeTemplate, Point, Shape, ShapeKind, ShapeStyle, Templates } from './types';
 
 // Custom components: node and line templates with {field} placeholders, and the items made
 // from them. Items store the rendered result (text, labels, look); these helpers re-render it
@@ -45,6 +45,55 @@ export function applyTemplate(text: string, data: Record<string, string> | undef
     .join('\n');
 }
 
+/** Whether one of `rules` is contained in `platform` (ignoring case). */
+export function rulesMatch(rules: string[] | undefined, platform: string | undefined): boolean {
+  const p = (platform ?? '').toLowerCase();
+  return !!p && (rules ?? []).some((rule) => {
+    const r = rule.trim().toLowerCase();
+    return !!r && p.includes(r);
+  });
+}
+
+/**
+ * The node element whose platform rule is the longest text contained in `platform` (ignoring
+ * case). Your own elements are tried first; the built-in ones only when none of yours match.
+ * Undefined when no rule matches.
+ */
+export function matchPlatform(templates: Templates, platform: string | undefined): NodeTemplate | undefined {
+  const p = (platform ?? '').toLowerCase();
+  if (!p) return undefined;
+  for (const builtIn of [false, true]) {
+    let best: NodeTemplate | undefined;
+    let bestLen = 0;
+    for (const t of templates.nodes) {
+      if (!!t.builtIn !== builtIn) continue;
+      for (const rule of t.platforms ?? []) {
+        const r = rule.trim().toLowerCase();
+        if (r && r.length > bestLen && p.includes(r)) {
+          best = t;
+          bestLen = r.length;
+        }
+      }
+    }
+    if (best) return best;
+  }
+  return undefined;
+}
+
+/** The default node element: `defaultId`, else `templates.defaultNodeId`, else the first element. */
+export function defaultNode(templates: Templates, defaultId?: string): NodeTemplate | undefined {
+  const id = defaultId ?? templates.defaultNodeId;
+  return templates.nodes.find((t) => t.id === id) ?? templates.nodes[0];
+}
+
+/**
+ * The node element a new device with this platform gets: the best rule match (`matchPlatform`),
+ * else the default element.
+ */
+export function templateForPlatform(templates: Templates, platform: string | undefined, defaultId?: string): NodeTemplate | undefined {
+  return matchPlatform(templates, platform) ?? defaultNode(templates, defaultId);
+}
+
 /** Smallest size at least (minW, minH) whose text box fits `text` unwrapped. */
 export function fitNodeSize(kind: ShapeKind, minW: number, minH: number, text: string, style: ShapeStyle) {
   const need = fitText(text, style, 0);
@@ -59,29 +108,52 @@ export function fitNodeSize(kind: ShapeKind, minW: number, minH: number, text: s
   return { w: Math.ceil(w), h: Math.ceil(h) };
 }
 
+/** Whether a template's nodes show their text beside the shape (pictures always do). */
+const textBeside = (t: NodeTemplate) => !!t.image || t.textPosition === 'right';
+
+/** Size a node of this template gets: its own size, grown to fit the text only when the text is inside. */
+function nodeSize(t: NodeTemplate, text: string) {
+  return textBeside(t) ? { w: t.w, h: t.h } : fitNodeSize(t.kind, t.w, t.h, text, t.style);
+}
+
+/** Makes a node match its template's kind, picture and text placement. */
+function applyKind(s: Shape, t: NodeTemplate) {
+  if (t.image) {
+    s.kind = 'image';
+    s.image = { asset: t.image.asset };
+  } else {
+    s.kind = t.kind === 'image' ? 'roundRect' : t.kind;
+    delete s.image;
+  }
+  if (textBeside(t)) s.textPosition = 'right';
+  else delete s.textPosition;
+}
+
 /** A new node from a template, centered at `center`. */
 export function nodeFromTemplate(t: NodeTemplate, data: Record<string, string>, center: Point): Shape {
   const text = applyTemplate(t.text, data);
-  const size = fitNodeSize(t.kind, t.w, t.h, text, t.style);
+  const size = nodeSize(t, text);
   const s = makeShape(t.kind, { x: Math.round(center.x - size.w / 2), y: Math.round(center.y - size.h / 2), ...size }, text, t.style);
+  applyKind(s, t);
   s.templateId = t.id;
   s.data = { ...data };
   return s;
 }
 
-/** Re-renders a node's text from its data, growing it (around its center) if the text no longer fits. */
+/** Re-renders a node's text from its data; a node with its text inside grows (around its center) if needed. */
 export function renderNodeText(s: Shape, t: NodeTemplate): void {
   s.text = applyTemplate(t.text, s.data);
+  if (s.textPosition === 'right') return;
   const size = fitNodeSize(s.kind, s.w, s.h, s.text, s.style);
   resizeAroundCenter(s, size.w, size.h);
 }
 
-/** Gives a node its template's current look (kind, style, size, text), keeping its center and data. */
+/** Gives a node its template's current look (kind, picture, style, size, text), keeping its center and data. */
 export function restyleNode(s: Shape, t: NodeTemplate): void {
-  s.kind = t.kind;
+  applyKind(s, t);
   s.style = { ...t.style };
   s.text = applyTemplate(t.text, s.data);
-  const size = fitNodeSize(t.kind, t.w, t.h, s.text, t.style);
+  const size = nodeSize(t, s.text);
   resizeAroundCenter(s, size.w, size.h);
 }
 
@@ -115,9 +187,21 @@ export function restyleLine(c: Connector, t: LineTemplate): void {
   renderLineText(c, t);
 }
 
-/** A node template capturing a shape's look and (placeholder) text. */
-export function templateFromShape(s: Shape, name: string, id = nanoid(10)): NodeTemplate {
-  return { id, name, kind: s.kind, w: Math.round(s.w), h: Math.round(s.h), style: { ...s.style }, text: s.text };
+/**
+ * A node template capturing a shape's look and (placeholder) text. A picture shape becomes a
+ * picture element showing `asset` (its picture, stored once by the caller), with the device
+ * fields beside it unless it already has text.
+ */
+export function templateFromShape(s: Shape, name: string, id = nanoid(10), asset?: string): NodeTemplate {
+  const t: NodeTemplate = { id, name, kind: s.kind, w: Math.round(s.w), h: Math.round(s.h), style: { ...s.style }, text: s.text };
+  if (s.kind === 'image' && asset) {
+    t.image = { asset };
+    t.textPosition = 'right';
+    if (!t.text) t.text = DEVICE_FIELDS_TEXT;
+  } else if (s.textPosition === 'right') {
+    t.textPosition = 'right';
+  }
+  return t;
 }
 
 /** A line template capturing a line's look and (placeholder) labels. */

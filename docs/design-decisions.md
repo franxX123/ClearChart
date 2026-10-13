@@ -201,3 +201,52 @@ on the item's group, so fill, border, text, arrowheads and labels fade together 
 exports keep it).
 **Why:** the common case ("fade this out") with one control; works the same for pictures.
 **Trade-off:** no separate fill-only transparency (a fill color with alpha could add that later).
+
+## 25. Device pictures: generic built-ins plus uploads, stored once
+
+**Chosen:** the built-in device icons are simple line art drawn for ClearChart. Real product
+pictures come from the user (**+ Device picture**). Pictures live once in `Doc.assets`, and
+elements and devices refer to them by id.
+**Why:** vendor icons and product photos are copyrighted; bundling them would break the
+clean-room rule. Storing by reference keeps a 100-switch import from storing the same photo
+100 times in files and the ~5 MB browser autosave.
+**Trade-off:** a device picture copied to another document travels as an asset reference, so
+pasting into a document without that asset shows an empty picture. Assets are pruned only
+after element changes, not after deleting devices, so a deleted device's unused picture stays
+until the next element change.
+
+## 26. Platform rules: longest substring, your elements first, applied live
+
+**Chosen:** an element's rules are plain texts matched as case-insensitive substrings of
+`hostPlatform`; the longest matching rule wins, but the user's own elements are tried before
+the built-in ones; new devices from an import that match nothing get the default element.
+Rule, default and platform changes move linked devices immediately, but only toward a
+**positive match**. A device matching no rule keeps its element, except devices on the old
+default (when the default changes) and devices an edited rule used to match.
+**Why:** platform strings vary ("N9K-C93180YC-FX", "cisco WS-C2960X-48FPD-L", "Nexus 9300"),
+and substrings cover them without regex. Plain longest-match would let generic built-in words
+("nexus", 5 letters) beat a user's specific model ("9300", 4), so the user's elements come
+first. Live application makes the panel the single place to decide how devices look. Falling
+back to the default on *any* non-match was tried first. It turned a hand-placed picture into
+the default box as soon as the first letter of a platform was typed, since the Data panel
+applies each keystroke.
+**Trade-off:** a matching rule still overrides a hand-picked element (unlink to keep a look).
+Typing a platform can pass through a shorter match on the way, e.g. "Catalyst" shows the
+built-in Switch before "C9300" reaches the user's element. A device whose platform stops
+matching through a data edit keeps its old element until a rule or the default changes.
+
+## 27. Text beside a shape, and arrows attach to it as part of the shape
+
+**Chosen:** `textPosition: 'right'` draws the text to the right of the shape's box. The box
+and the text together form one **attach frame**, which is hit-tested, attached to (pinned ends
+snap onto it, floating ends use its sides), measured and routed around. Selection handles stay
+on the box. Pinned ends keep storing `at` as fractions of the box, beyond 1 on the text.
+**Why:** requested. A first version put the text below the picture and attached links to the
+picture only. Users read a device as picture plus name, so they expect to drop an arrow on
+either, and text on the right keeps diagrams with many devices compact vertically. One frame
+makes every consumer (attaching, ports, spreading, obstacles, bounds) agree without special
+cases. Files from the first version are migrated (`'below'` → `'right'`) on load.
+**Trade-off:** floating ends are centered on the whole block, so a line from the top or bottom
+meets it between the picture and the text, and one from the right meets the text's edge. The
+text is unwrapped, so very long values make wide devices. The Visio export glues lines to the
+shape sheet, so Visio re-routes them to the picture when shapes move there.

@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { defaultTemplates } from '../model/doc';
+import { builtInAssets } from '../shapes/deviceIcons';
 import { makeLayer } from '../model/page';
 import type { Doc, Item, Layer, LineTemplate, NodeTemplate, Page, Templates } from '../model/types';
 
@@ -57,16 +58,44 @@ export function parseDoc(json: string): Doc {
   const title = str(raw.title, 'Untitled diagram');
   if (raw.version === 1) {
     const page: Page = { id: nanoid(10), name: 'Page 1', ...parseItems(raw), layers: [makeLayer()] };
-    return { version: 2, title, pages: [page], templates: defaultTemplates() };
+    return { version: 2, title, pages: [page], templates: defaultTemplates(), assets: builtInAssets() };
   }
   if (raw.version !== 2 || !Array.isArray(raw.pages) || raw.pages.length === 0) {
     throw new Error('Not a ClearChart document');
   }
-  // A document saved before templates existed starts with the default node and line. (One
-  // whose templates were all deleted keeps an empty list, so they don't come back.)
-  const doc: Doc = { version: 2, title, pages: raw.pages.map(parsePage), templates: parseTemplates(raw.templates) ?? defaultTemplates() };
+  const doc: Doc = { version: 2, title, pages: raw.pages.map(parsePage) };
+  const assets = parseAssets(raw.assets);
+  if (assets) doc.assets = assets;
+  const templates = parseTemplates(raw.templates);
+  if (templates) {
+    doc.templates = templates;
+  } else {
+    // A document saved before templates existed starts with the built-in elements and their
+    // pictures. (One whose templates were all deleted keeps an empty list, so they don't come back.)
+    doc.templates = defaultTemplates();
+    doc.assets = { ...builtInAssets(), ...doc.assets };
+  }
   migrateDeviceFields(doc);
+  migrateTextPosition(doc);
   return doc;
+}
+
+/**
+ * Device text was first drawn below pictures (`textPosition: 'below'`); it now goes to their
+ * right. Moves elements and shapes saved that way over.
+ */
+function migrateTextPosition(doc: Doc): void {
+  const items: { textPosition?: string }[] = [
+    ...(doc.templates?.nodes ?? []),
+    ...doc.pages.flatMap((p) => p.order.map((id) => p.items[id] as { textPosition?: string })),
+  ];
+  for (const it of items) if (it.textPosition === 'below') it.textPosition = 'right';
+}
+
+/** Stored pictures: an object of data-URL strings (anything else is dropped). */
+function parseAssets(raw: unknown): Record<string, string> | undefined {
+  if (!isObj(raw)) return undefined;
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string'));
 }
 
 /** Device field names used by the first CSV import, and the column names that replaced them. */
@@ -101,10 +130,12 @@ function migrateDeviceFields(doc: Doc): void {
 function parseTemplates(raw: unknown): Templates | undefined {
   if (!isObj(raw)) return undefined;
   const list = (v: unknown) => (Array.isArray(v) ? v.filter((t) => isObj(t) && typeof t.id === 'string') : []);
-  return {
+  const out: Templates = {
     nodes: list(raw.nodes).filter((t) => isObj(t.style) && typeof t.kind === 'string') as unknown as NodeTemplate[],
     lines: list(raw.lines).filter((t) => isObj(t.style)) as unknown as LineTemplate[],
   };
+  if (typeof raw.defaultNodeId === 'string') out.defaultNodeId = raw.defaultNodeId;
+  return out;
 }
 
 export function loadAutosave(): Doc | null {

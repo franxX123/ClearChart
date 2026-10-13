@@ -49,15 +49,49 @@ describe('document files', () => {
     expect(back.pages[0].items[node.id].data).toEqual({ hostName: 'sw1', hostIP: '10.0.0.1', hostPlatform: 'C9300', site: 'HQ' });
   });
 
-  it('gives documents without templates the default node and line, but not ones whose templates were deleted', () => {
+  it('gives documents without templates the built-in elements and pictures, but not ones whose templates were deleted', () => {
     const doc = sampleDoc();
-    expect(doc.templates?.nodes.map((t) => t.name)).toEqual(['Device']);
+    const builtIns = defaultTemplates().nodes.map((t) => t.name);
+    expect(doc.templates?.nodes.map((t) => t.name)).toEqual(builtIns);
     expect(doc.templates?.lines.map((t) => t.name)).toEqual(['Link']);
-    // Saved before templates existed: no `templates` key at all (stringify drops undefined).
-    const older = { ...doc, templates: undefined };
-    expect(parseDoc(JSON.stringify(older)).templates?.nodes.map((t) => t.text)).toEqual(['{hostName}\n{hostIP}\n{hostPlatform}']);
-    const emptied = { ...doc, templates: { nodes: [], lines: [] } };
-    expect(parseDoc(JSON.stringify(emptied)).templates).toEqual({ nodes: [], lines: [] });
+    // Saved before templates existed: no `templates` or `assets` key at all (stringify drops undefined).
+    const older = parseDoc(JSON.stringify({ ...doc, templates: undefined, assets: undefined }));
+    expect(older.templates?.nodes.map((t) => t.name)).toEqual(builtIns);
+    expect(older.templates?.defaultNodeId).toBe(older.templates?.nodes.find((t) => t.name === 'Generic device')?.id);
+    for (const t of older.templates!.nodes) expect(older.assets?.[t.image!.asset]).toMatch(/^data:image\/svg\+xml,/);
+    const emptied = parseDoc(JSON.stringify({ ...doc, templates: { nodes: [], lines: [] }, assets: undefined }));
+    expect(emptied.templates).toEqual({ nodes: [], lines: [] });
+    expect(emptied.assets).toBeUndefined();
+  });
+
+  it('round-trips uploaded pictures, picture elements with rules, the default element and picture devices', () => {
+    const doc = sampleDoc();
+    doc.assets = { ...doc.assets, up1: 'data:image/png;base64,iVBORw0KGgo=' };
+    const t = { ...doc.templates!.nodes[0], id: 'n9k', name: 'Nexus 9300', image: { asset: 'up1' }, platforms: ['9300', 'N9K'] };
+    doc.templates!.nodes.push(t);
+    doc.templates!.defaultNodeId = 'n9k';
+    addItems(doc.pages[0], [nodeFromTemplate(t, { hostName: 'core1', hostPlatform: 'N9K-C93180' }, { x: 0, y: 0 })]);
+    const back = parseDoc(serializeDoc(doc));
+    expect(back).toEqual(doc);
+    expect(back.pages[0].items[back.pages[0].order.at(-1)!]).toMatchObject({ kind: 'image', image: { asset: 'up1' }, textPosition: 'right' });
+  });
+
+  it('moves device text saved below pictures to their right', () => {
+    const doc = sampleDoc();
+    const t = doc.templates!.nodes[0];
+    const node = nodeFromTemplate(t, { hostName: 'sw1' }, { x: 0, y: 0 });
+    addItems(doc.pages[0], [node]);
+    const json = serializeDoc(doc).replace(/"textPosition": "right"/g, '"textPosition": "below"');
+    expect(json).toContain('"textPosition": "below"');
+    const back = parseDoc(json);
+    expect(back.templates!.nodes.every((n) => n.textPosition === 'right')).toBe(true);
+    expect(back.pages[0].items[node.id]).toMatchObject({ textPosition: 'right' });
+    expect(back).toEqual(doc);
+  });
+
+  it('keeps only picture data among stored assets', () => {
+    const doc = { ...sampleDoc(), assets: { ok: 'data:image/png;base64,AA', bad: 7, worse: { x: 1 } } };
+    expect(parseDoc(JSON.stringify(doc)).assets).toEqual({ ok: 'data:image/png;base64,AA' });
   });
 
   it('drops malformed templates instead of failing', () => {

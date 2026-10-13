@@ -121,5 +121,19 @@ Keep the builder pure (bytes in, bytes out) so it can be tested by reading the r
   Mention it in the README and in the dialogs' placeholder hint (`ui/TemplateDialogs.tsx`).
 - **Renaming a device field** breaks saved documents unless `parseDoc` migrates it — see
   `migrateDeviceFields` in `io/persist.ts` (it renamed the first import's name/ip/platform).
-- **A new field in the default templates:** edit `defaultTemplates()` in `model/templates.ts`
-  (only affects documents that don't have templates yet).
+- **A new field in the default templates:** edit `DEVICE_FIELDS_TEXT` / `defaultTemplates()`
+  in `model/doc.ts` (only affects documents that don't have templates yet).
+
+## Add a built-in device picture or platform rule
+
+- Add a `device(key, name, rules, frame, body)` entry to `BUILT_IN_DEVICES` in
+  `shapes/deviceIcons.ts`. Draw the body on the 64×64 grid with the helpers (`arrow`, `arc`,
+  `lines`, `dot`), and set `frame` tightly around it (plus the stroke), so links attach where the
+  drawing is. The element's size comes from the frame's aspect ratio. Keep it original line
+  art, not vendor artwork.
+- Keys are persisted (asset id `builtin-<key>`); names are how **Add built-in devices** tells
+  what a document already has. Don't rename either.
+- Rules are lower-case substrings; check them against real platform strings in
+  `deviceIcons.test.ts` (longer rules win among built-ins, e.g. "c91" over "c9").
+- New and changed built-ins only reach new documents, or documents through **Add built-in
+  devices**. Existing documents keep the pictures and rules they stored.

@@ -1,5 +1,5 @@
 import { docBounds, snapToGrid } from '../canvas/geometry';
-import { rectCenter, shapeBox } from '../canvas/transform';
+import { rectCenter, shapeExtent } from '../canvas/transform';
 import { forceLayout, type LayoutNode } from '../layout/force';
 import { isConnector, isShape } from '../model/doc';
 import { lineFromTemplate, nodeFromTemplate } from '../model/templates';
@@ -21,6 +21,8 @@ export interface ImportSummary {
   /** Rows folded into an earlier row describing the same link. */
   merged: number;
   skipped: SkippedRow[];
+  /** New devices per element they'll be drawn with, most first. */
+  byTemplate: { name: string; count: number }[];
 }
 
 export interface ImportPlan {
@@ -47,9 +49,19 @@ function existingDevices(page: Page): Map<string, Shape> {
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}↔${b}` : `${b}↔${a}`);
 
-export function planImport(page: Page, graph: LinkGraph, nodeT: NodeTemplate, lineT: LineTemplate): ImportPlan {
+/**
+ * Plans an import. `pickNode` chooses the element (template) for a new device from its fields —
+ * e.g. by its platform; `lineT` draws the links.
+ */
+export function planImport(
+  page: Page,
+  graph: LinkGraph,
+  pickNode: (fields: Record<string, string>) => NodeTemplate,
+  lineT: LineTemplate,
+): ImportPlan {
   const existing = existingDevices(page);
   const updates: ImportPlan['updates'] = [];
+  const perTemplate = new Map<string, number>();
 
   // Devices: reuse by name (merging in non-empty new fields), or plan a new node.
   const shapeOf = new Map<string, string>(); // device key → shape id (existing or new)
@@ -64,7 +76,9 @@ export function planImport(page: Page, graph: LinkGraph, nodeT: NodeTemplate, li
       if (Object.entries(data).some(([f, v]) => old.data?.[f] !== v)) updates.push({ id: old.id, data });
     } else {
       // Placed at the origin for now; the layout below moves it.
-      const node = nodeFromTemplate(nodeT, fields, { x: 0, y: 0 });
+      const t = pickNode(fields);
+      perTemplate.set(t.name, (perTemplate.get(t.name) ?? 0) + 1);
+      const node = nodeFromTemplate(t, fields, { x: 0, y: 0 });
       shapeOf.set(key, node.id);
       fresh.push({ key, node });
     }
@@ -92,16 +106,25 @@ export function planImport(page: Page, graph: LinkGraph, nodeT: NodeTemplate, li
   }
 
   // Layout: new devices are free; everything already on the page stays put and pushes them away.
+  // Boxes include any text drawn beside a shape, so labels get room too.
   if (fresh.length) {
     const nodes: LayoutNode[] = [];
     for (const id of page.order) {
       const it = page.items[id];
       if (isShape(it)) {
-        const b = shapeBox(it);
+        const b = shapeExtent(it);
         nodes.push({ id: it.id, w: b.w, h: b.h, fixed: rectCenter(b) });
       }
     }
-    for (const { node } of fresh) nodes.push({ id: node.id, w: node.w, h: node.h });
+    // How far each new node's drawn extent is centered from its box (text beside it shifts it right).
+    const offset = new Map<string, Point>();
+    for (const { node } of fresh) {
+      const e = shapeExtent(node);
+      const ec = rectCenter(e);
+      const bc = rectCenter(node);
+      offset.set(node.id, { x: ec.x - bc.x, y: ec.y - bc.y });
+      nodes.push({ id: node.id, w: e.w, h: e.h });
+    }
     const edges = newLinks.map((l) => [shapeOf.get(l.host)!, shapeOf.get(l.neighbor)!] as [string, string]);
     const freshIds = new Set(fresh.map((f) => f.node.id));
     const anchors = edges.flatMap(([a, b]) => (freshIds.has(a) && !freshIds.has(b) ? [b] : freshIds.has(b) && !freshIds.has(a) ? [a] : []));
@@ -114,8 +137,9 @@ export function planImport(page: Page, graph: LinkGraph, nodeT: NodeTemplate, li
     const pos = forceLayout(nodes, edges, { center });
     for (const { node } of fresh) {
       const c = pos.get(node.id)!;
-      node.x = snapToGrid(c.x - node.w / 2);
-      node.y = snapToGrid(c.y - node.h / 2);
+      const o = offset.get(node.id)!;
+      node.x = snapToGrid(c.x - o.x - node.w / 2);
+      node.y = snapToGrid(c.y - o.y - node.h / 2);
     }
   }
 
@@ -146,6 +170,7 @@ export function planImport(page: Page, graph: LinkGraph, nodeT: NodeTemplate, li
       linksExisting: graph.links.length - newLines.length,
       merged: graph.merged,
       skipped: graph.skipped,
+      byTemplate: [...perTemplate].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     },
     newNodes: fresh.map((f) => f.node),
     updates,

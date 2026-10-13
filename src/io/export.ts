@@ -1,5 +1,6 @@
 import { canvasRefs } from '../canvas/Canvas';
 import { docBounds } from '../canvas/geometry';
+import { shapeImageSrc } from '../model/doc';
 import type { Doc, Page } from '../model/types';
 import { buildVsdx, decodeDataUrl, visioImageExt, type VsdxImage } from './vsdx';
 import { downloadBlob, fileSafe } from './persist';
@@ -86,9 +87,10 @@ async function visioImage(src: string, w: number, h: number): Promise<VsdxImage 
   try {
     const img = await loadImage(src);
     const canvas = document.createElement('canvas');
-    // Vector pictures have no natural pixel size worth trusting; render at twice the shape size.
-    canvas.width = Math.max(1, Math.round(img.naturalWidth || w * 2));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight || h * 2));
+    // Vector pictures have no natural pixel size worth trusting; render them at 4× the shape size.
+    const vector = decoded.mime === 'image/svg+xml';
+    canvas.width = Math.max(1, Math.round(vector || !img.naturalWidth ? w * 4 : img.naturalWidth));
+    canvas.height = Math.max(1, Math.round(vector || !img.naturalHeight ? h * 4 : img.naturalHeight));
     canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
     return blob ? { bytes: new Uint8Array(await blob.arrayBuffer()), ext: 'png' } : null;
@@ -100,11 +102,16 @@ async function visioImage(src: string, w: number, h: number): Promise<VsdxImage 
 /** Downloads the whole document (every page) as an editable Visio file, `<title>.vsdx`. */
 export async function exportVisio(doc: Doc): Promise<void> {
   const images = new Map<string, VsdxImage>();
+  // Decoded once per distinct picture; shapes showing the same one share it (stored once in the file).
+  const bySrc = new Map<string, VsdxImage | null>();
   for (const page of doc.pages) {
     for (const id of page.order) {
       const it = page.items[id];
-      if (it.type !== 'shape' || it.kind !== 'image' || !it.image) continue;
-      const img = await visioImage(it.image.src, it.w, it.h);
+      if (it.type !== 'shape' || it.kind !== 'image') continue;
+      const src = shapeImageSrc(it, doc.assets);
+      if (!src) continue;
+      if (!bySrc.has(src)) bySrc.set(src, await visioImage(src, it.w, it.h));
+      const img = bySrc.get(src);
       if (img) images.set(it.id, img);
     }
   }

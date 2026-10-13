@@ -5,7 +5,7 @@ import { currentPage, useStore } from '../model/store';
 import { SHAPES } from '../shapes/library';
 import { textLines } from './ShapeView';
 import { FONT_FAMILY, fitText, LINE_HEIGHT, TEXT_PAD } from './text';
-import { rotationOf } from './transform';
+import { rotationOf, SIDE_GAP, SIDE_PAD } from './transform';
 
 /**
  * Textarea laid over a shape (or a connector's label) while its text is edited. It has no
@@ -39,7 +39,19 @@ export function TextEditor({ id }: { id: string }) {
     const rot = rotationOf(item);
     // Where the textarea's top-left sits in the shape's local frame.
     let origin: { x: number; y: number };
-    if (item.autoSize) {
+    if (item.textPosition === 'right') {
+      // Right of the shape, vertically centered, where the text renders; grows as you type.
+      const size = fitText(value || ' ', st, 0);
+      const h = Math.max(1, value.split('\n').length) * st.fontSize * LINE_HEIGHT;
+      origin = { x: item.w + SIDE_GAP, y: item.h / 2 - h / 2 };
+      style = {
+        width: (size.w + 8 + SIDE_PAD * 2) * z,
+        height: h * z,
+        padding: 0,
+        paddingLeft: SIDE_PAD * z,
+        whiteSpace: 'pre',
+      };
+    } else if (item.autoSize) {
       // Grows with the text as you type; anchored at the box's top-left.
       const size = fitText(value, st);
       origin = { x: 0, y: 0 };
@@ -69,7 +81,7 @@ export function TextEditor({ id }: { id: string }) {
       fontWeight: st.bold ? 'bold' : 'normal',
       fontStyle: st.italic ? 'italic' : 'normal',
       color: st.textColor,
-      textAlign: st.textAlign ?? 'center',
+      textAlign: item.textPosition === 'right' ? 'left' : (st.textAlign ?? 'center'),
       // Rotate with the shape, about the shape's center.
       transform: rot ? `rotate(${rot}deg)` : undefined,
       transformOrigin: `${(item.w / 2 - origin.x) * z}px ${(item.h / 2 - origin.y) * z}px`,

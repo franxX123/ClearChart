@@ -1,4 +1,5 @@
 import type { Point, Rect, Shape } from '../model/types';
+import { cssFont, LINE_HEIGHT, measureText } from './text';
 
 // Rotation math for shapes. A leaf module (types only) so routing and geometry can both use it.
 
@@ -50,10 +51,67 @@ export function shapeBox(s: Shape): Rect {
   return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
 }
 
-/** Whether `p` is inside the shape's (rotated) bounding rect, grown by `pad`. */
+/** Gap between a shape and the text drawn to its right (`textPosition: 'right'`), in px. */
+export const SIDE_GAP = 8;
+/** Padding inside a side label's box, left of its text. */
+export const SIDE_PAD = 2;
+
+/**
+ * Where a shape's text sits when it's drawn to the right of the shape: a rect in the shape's
+ * local frame, vertically centered on the box, text left-aligned (one line per line break, not
+ * wrapped). Null when the text is inside or empty.
+ */
+export function sideLabelBox(s: Shape): Rect | null {
+  if (s.textPosition !== 'right' || !s.text) return null;
+  const st = s.style;
+  const lines = s.text.split('\n');
+  const font = cssFont(st.fontSize, st.bold, st.italic);
+  const w = Math.max(...lines.map((l) => measureText(l, font, st.fontSize))) + SIDE_PAD * 2;
+  const h = lines.length * st.fontSize * LINE_HEIGHT;
+  return { x: s.w + SIDE_GAP, y: s.h / 2 - h / 2, w, h };
+}
+
+/**
+ * The rect, in the shape's local frame, that arrows attach to and lines route around when the
+ * shape has text beside it: its box and the text together, so a line can end on the text too.
+ * Null for other shapes (they attach to their kind's outline).
+ */
+export function attachFrame(s: Shape): Rect | null {
+  const label = sideLabelBox(s);
+  if (!label) return null;
+  const top = Math.min(0, label.y);
+  return { x: 0, y: top, w: label.x + label.w, h: Math.max(s.h, label.y + label.h) - top };
+}
+
+/** World-space bounds of a local rect of a shape (rotated with it). */
+export function localRectBox(s: Shape, r: Rect): Rect {
+  const pts = [
+    { x: r.x, y: r.y },
+    { x: r.x + r.w, y: r.y },
+    { x: r.x + r.w, y: r.y + r.h },
+    { x: r.x, y: r.y + r.h },
+  ].map((p) => localToWorld(s, p));
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/** Bounds of everything a shape draws: its (rotated) box plus any text beside it. */
+export function shapeExtent(s: Shape): Rect {
+  const frame = attachFrame(s);
+  return frame ? localRectBox(s, frame) : shapeBox(s);
+}
+
+/**
+ * Whether `p` is on the shape: inside its (rotated) bounding rect, or its text beside it
+ * (`attachFrame`), grown by `pad`.
+ */
 export function pointInShape(p: Point, s: Shape, pad = 0): boolean {
   const l = worldToLocal(s, p);
-  return l.x >= -pad && l.x <= s.w + pad && l.y >= -pad && l.y <= s.h + pad;
+  const f = attachFrame(s) ?? { x: 0, y: 0, w: s.w, h: s.h };
+  return l.x >= f.x - pad && l.x <= f.x + f.w + pad && l.y >= f.y - pad && l.y <= f.y + f.h + pad;
 }
 
 /** Rotates a unit direction and snaps it to the nearest axis (elbow routing only leaves ports along an axis). */

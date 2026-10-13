@@ -67,7 +67,12 @@
 **Phase 5 — Smart features (partly done)**
 - *Done:* item data (key/value fields), node/line templates with `{field}` placeholders that
   restyle linked items, CSV import of network links (device dedupe, reciprocal-row merge,
-  re-import that updates instead of duplicating), deterministic force-directed layout.
+  re-import that updates instead of duplicating), deterministic force-directed layout, device
+  pictures (built-in generic icons, uploaded pictures stored once, text on the right that
+  arrows can attach to as well) chosen by live platform rules.
+- *Device pictures, next:* copy assets along when pasting devices into another document, prune
+  assets when devices are deleted, a picture library shared across documents, wrapping long
+  label values.
 - *Next:* a nodes CSV (device inventory joined by name), mirroring a file (removing links no
   longer in it), hierarchical/tiered layout, an "Add field" control and alignment in
   Properties, conditional formatting rules, templates gallery, diagrams from text or SQL, AI

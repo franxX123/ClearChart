@@ -70,12 +70,44 @@ Style a shape and give it text with CSV column names in braces, e.g. `hostName: 
 device that appears as the neighbor in the CSV fills these from its neighborName / neighborIP /
 neighborPlatform columns.) Lines work the same way
 (use their Start/End label fields, e.g. `{hostInterface}`) → **Save as line template**.
-Templates appear under **Graphs** in the left panel, which starts with a ready-made node
-(**Device**) and line (**Link**): click or drag a node template to add one;
+Templates appear under **Graphs** in the left panel, which starts with the built-in device
+pictures (below) and a **Link** line: click or drag a node template to add one;
 click a line template to draw arrows with it. Imports let you pick which templates to use.
 Items made from a template keep their fields — edit them under **Data** in the right panel —
 and follow the template: edit it (⋯ on its tile, or right-click an item) and every item made
 from it updates. **Unlink** detaches an item.
+
+### Device pictures and platform rules
+
+Imported devices are drawn as a **picture with their hostname, IP and platform to its right**.
+The picture and its text work as one object: arrows attach to either, links leave from the
+sides of the whole block, and elbow lines route around it.
+
+- **Built-in pictures:** new documents start with simple generic icons drawn for ClearChart:
+  Switch, Layer-3 switch, Router, Firewall, Wireless AP, Load balancer, Server, Cloud and
+  Generic device. They come with common Cisco platform rules, e.g. Switch for `catalyst`,
+  `nexus`, `n9k`, `c9`, `ws-c`, Router for `isr`, `asr`, `c8` and Firewall for `asa`,
+  `firepower`, `ftd`. No vendor artwork is included.
+- **Your own pictures:** **+ Device picture** (under Graphs) makes a new element from an
+  image file, such as a photo of a Catalyst 9300. In its editor (⋯), fill in **Use for devices
+  whose platform contains**, e.g. `9300, C93`. You can also change or remove an element's
+  picture there, edit the text shown beside it, or make it the **default**.
+- **How a device's element is chosen:** the element whose rule appears in the device's
+  `hostPlatform` (ignoring case), with the longest matching rule winning. Your own elements
+  are checked before the built-in ones, so your `9300` picture beats the built-in Switch for
+  "Nexus 9300". A device matching no rule gets the default element (Generic device, marked
+  *default* in the panel; the import dialog can pick another).
+- **Rules apply live:** when a device's `hostPlatform` matches a rule, it moves to that element
+  right away. This happens when you edit a rule or the platform field, and each change is one
+  undo step. A device whose platform matches **no** rule keeps its element. That includes one
+  you placed yourself, or one whose platform you're still typing. There are two exceptions:
+  devices on the default element follow a change of default, and a device that one of an
+  element's rules had matched goes back to the default once you change that rule so it no
+  longer matches. Devices you **Unlink** never change.
+- Each picture is stored once in the document, however many devices show it. The SVG, PNG and
+  Visio exports include the pictures and the text beside them.
+- Documents made before device pictures keep their own elements. **Add built-in devices**
+  (under Graphs) adds the built-in set and applies its rules to the devices already imported.
 
 Work autosaves to the browser's localStorage (a notice appears if pictures make it too big — then use
 **Save**). **Save** / **Open** use `.clearchart.json` files.

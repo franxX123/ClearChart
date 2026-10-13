@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { makeShape } from '../model/doc';
+import { addItems, makeShape } from '../model/doc';
+import { makePage } from '../model/page';
 import type { Point } from '../model/types';
-import { localToWorld, pointInShape, resizeRect, shapeBox, snapAngle, worldToLocal } from './transform';
+import { itemBounds } from './geometry';
+import { LINE_HEIGHT } from './text';
+import {
+  attachFrame,
+  localToWorld,
+  pointInShape,
+  resizeRect,
+  shapeBox,
+  shapeExtent,
+  SIDE_GAP,
+  sideLabelBox,
+  snapAngle,
+  worldToLocal,
+} from './transform';
 
 const close = (p: Point, q: Point) => {
   expect(p.x).toBeCloseTo(q.x);
@@ -79,5 +93,61 @@ describe('resizeRect', () => {
     const r = resizeRect(orig, 30, 'se', { x: 40, y: 25 }, 10);
     expect(r.w).toBeGreaterThan(orig.w);
     close(localToWorld({ ...s, ...r }, { x: 0, y: 0 }), fixed);
+  });
+});
+
+describe('text beside a shape', () => {
+  /** A 56×40 picture at (100, 100) with two lines of 12 px text to its right. */
+  const device = (text = 'a-long-hostname\n10.0.0.1') => {
+    const s = makeShape('image', { x: 100, y: 100, w: 56, h: 40 }, text, { fontSize: 12 });
+    s.textPosition = 'right';
+    return s;
+  };
+
+  it('sits right of the box, vertically centered, one line per line break', () => {
+    const s = device();
+    const b = sideLabelBox(s)!;
+    expect(b.x).toBe(56 + SIDE_GAP);
+    expect(b.h).toBeCloseTo(2 * 12 * LINE_HEIGHT);
+    expect(b.y + b.h / 2).toBeCloseTo(20);
+    expect(b.w).toBeGreaterThan(56); // the hostname is long
+    expect(sideLabelBox({ ...s, text: '' })).toBeNull();
+    expect(sideLabelBox({ ...s, textPosition: undefined })).toBeNull();
+  });
+
+  it('forms one frame with the box: bounds, hits and attaching all use it', () => {
+    const s = device();
+    const b = sideLabelBox(s)!;
+    expect(attachFrame(s)).toEqual({ x: 0, y: 0, w: b.x + b.w, h: 40 });
+    const e = shapeExtent(s);
+    expect(e).toEqual({ x: 100, y: 100, w: b.x + b.w, h: 40 });
+    expect(shapeBox(s)).toEqual({ x: 100, y: 100, w: 56, h: 40 });
+    // On the text (and the gap before it) counts as on the shape; past the text doesn't.
+    expect(pointInShape({ x: 100 + b.x + 10, y: 120 }, s)).toBe(true);
+    expect(pointInShape({ x: 100 + 56 + 3, y: 120 }, s)).toBe(true);
+    expect(pointInShape({ x: 100 + b.x + b.w + 5, y: 120 }, s)).toBe(false);
+    const page = makePage();
+    addItems(page, [s]);
+    expect(itemBounds(page, s.id)).toEqual(e);
+    // A shape without text beside it: no frame, extent and box agree.
+    const plain = makeShape('rect', { x: 0, y: 0, w: 10, h: 10 }, 'inside');
+    expect(attachFrame(plain)).toBeNull();
+    expect(shapeExtent(plain)).toEqual(shapeBox(plain));
+  });
+
+  it('grows the frame when the text is taller than the shape', () => {
+    const s = device('a\nb\nc\nd'); // 4 lines of 15 px: 60 px, centered on a 40 px box
+    const f = attachFrame(s)!;
+    expect(f.y).toBeCloseTo(-10);
+    expect(f.h).toBeCloseTo(60);
+  });
+
+  it('turns with the shape', () => {
+    const s = device();
+    s.rotation = 180;
+    const e = shapeExtent(s);
+    // Upside down, the text sits on the left.
+    expect(e.x + e.w).toBeCloseTo(156);
+    expect(e.x).toBeCloseTo(156 - attachFrame(s)!.w);
   });
 });

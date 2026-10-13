@@ -1,5 +1,5 @@
 import { docBounds } from '../canvas/geometry';
-import { rectCenter, rotationOf } from '../canvas/transform';
+import { rectCenter, rotationOf, SIDE_GAP, sideLabelBox } from '../canvas/transform';
 import { END_LABEL_SIZE, endLabels, LABEL_SIZE, type PlacedLabel } from '../connectors/labels';
 import { connectorPoints, endLabelStacks, routeObstacles } from '../connectors/routing';
 import { isConnector, isShape } from '../model/doc';
@@ -14,7 +14,10 @@ import { zip, type ZipEntry } from './zip';
 // to its shapes, and pictures as embedded images. Hidden layers are left out. Pure: pictures
 // are decoded beforehand (see `exportVisio` in export.ts) and passed in.
 
-/** A picture's bytes for a `kind: 'image'` shape, by shape id. */
+/**
+ * A picture's bytes for a `kind: 'image'` shape, passed by shape id. Shapes showing the same
+ * picture should share one object: it's then stored once in the file.
+ */
 export interface VsdxImage {
   bytes: Uint8Array;
   ext: 'png' | 'jpeg' | 'gif';
@@ -148,6 +151,7 @@ function shapeXml(s: Shape, id: number, frame: PageFrame, imageRel: string | und
   // A picture whose bytes we don't have becomes a dashed placeholder box.
   const placeholder = isImage && !imageRel;
   const box = SHAPES[s.kind].textBox(s.w, s.h);
+  const side = sideLabelBox(s);
   const fx = (v: number) => num(v / Math.max(s.w, 1));
   const fy = (v: number) => num(v / Math.max(s.h, 1));
 
@@ -167,15 +171,31 @@ function shapeXml(s: Shape, id: number, frame: PageFrame, imageRel: string | und
     cell('FillForegnd', color(st.fill, '#FFFFFF')),
     cell('FillPattern', noFill ? 0 : 1),
     cell('FillForegndTrans', trans),
-    // The text block follows the kind's text box, as fractions of the shape (so it scales).
-    cell('TxtPinX', (box.x + box.w / 2) / PX_PER_IN, `Width*${fx(box.x + box.w / 2)}`),
-    cell('TxtPinY', (s.h - box.y - box.h / 2) / PX_PER_IN, `Height*${fy(s.h - box.y - box.h / 2)}`),
-    cell('TxtWidth', box.w / PX_PER_IN, `Width*${fx(box.w)}`),
-    cell('TxtHeight', box.h / PX_PER_IN, `Height*${fy(box.h)}`),
-    cell('TxtLocPinX', box.w / 2 / PX_PER_IN, 'TxtWidth*0.5'),
-    cell('TxtLocPinY', box.h / 2 / PX_PER_IN, 'TxtHeight*0.5'),
+    ...(side
+      ? [
+          // Text drawn to the right of the shape: a block pinned by its left edge just past the
+          // shape's right edge (so it keeps its gap when resized in Visio), vertically centered,
+          // a little wider than the text so Visio's fonts don't wrap it.
+          cell('TxtPinX', side.x / PX_PER_IN, `Width+${num(SIDE_GAP / PX_PER_IN)}`),
+          cell('TxtPinY', h / 2, 'Height*0.5'),
+          cell('TxtWidth', (side.w + 16) / PX_PER_IN),
+          cell('TxtHeight', side.h / PX_PER_IN),
+          cell('TxtLocPinX', 0, 'TxtWidth*0'),
+          cell('TxtLocPinY', side.h / 2 / PX_PER_IN, 'TxtHeight*0.5'),
+        ]
+      : [
+          // The text block follows the kind's text box, as fractions of the shape (so it scales).
+          cell('TxtPinX', (box.x + box.w / 2) / PX_PER_IN, `Width*${fx(box.x + box.w / 2)}`),
+          cell('TxtPinY', (s.h - box.y - box.h / 2) / PX_PER_IN, `Height*${fy(s.h - box.y - box.h / 2)}`),
+          cell('TxtWidth', box.w / PX_PER_IN, `Width*${fx(box.w)}`),
+          cell('TxtHeight', box.h / PX_PER_IN, `Height*${fy(box.h)}`),
+          cell('TxtLocPinX', box.w / 2 / PX_PER_IN, 'TxtWidth*0.5'),
+          cell('TxtLocPinY', box.h / 2 / PX_PER_IN, 'TxtHeight*0.5'),
+        ]),
     cell('VerticalAlign', 1),
   ];
+  const text = s.text ? `<Text>${esc(s.text)}</Text>` : '';
+  const sections = textSections(st.textColor, st.fontSize, st.opacity, st.bold, st.italic, !!side || st.textAlign === 'left');
 
   if (isImage) {
     if (imageRel) {
@@ -194,18 +214,19 @@ function shapeXml(s: Shape, id: number, frame: PageFrame, imageRel: string | und
     return (
       `<Shape ID="${id}" NameU="Picture.${id}" Name="Picture" Type="${imageRel ? 'Foreign' : 'Shape'}" LineStyle="0" FillStyle="0" TextStyle="0">` +
       cells.join('') +
+      (text ? sections : '') +
       outline +
       shapeData(s.data) +
+      text +
       foreign +
       `</Shape>`
     );
   }
 
-  const text = s.text ? `<Text>${esc(s.text)}</Text>` : '';
   return (
     `<Shape ID="${id}" NameU="${esc(s.kind)}.${id}" Name="${esc(s.kind)}" Type="Shape" LineStyle="0" FillStyle="0" TextStyle="0">` +
     cells.join('') +
-    textSections(st.textColor, st.fontSize, st.opacity, st.bold, st.italic, st.textAlign === 'left') +
+    sections +
     shapeData(s.data) +
     geometry(s) +
     text +
@@ -308,11 +329,14 @@ function labelXml(label: PlacedLabel, id: number, frame: PageFrame, textColor: s
 interface BuiltPage {
   xml: string;
   rels: string | null;
-  media: { name: string; image: VsdxImage }[];
   frame: PageFrame;
 }
 
-function buildPage(page: Page, images: Map<string, VsdxImage>, mediaStart: number): BuiltPage {
+/**
+ * `mediaName` gives a picture's file name in the package (the same name for the same picture
+ * object, so it's stored once); each page relates to each picture it uses once.
+ */
+function buildPage(page: Page, images: Map<string, VsdxImage>, mediaName: (image: VsdxImage) => string): BuiltPage {
   const frame = pageFrame(page);
   const order = renderOrder(page);
   // Sheet ids for every exported item first, so lines can refer to shapes drawn after them.
@@ -323,7 +347,7 @@ function buildPage(page: Page, images: Map<string, VsdxImage>, mediaStart: numbe
   const shapes: string[] = [];
   const connects: string[] = [];
   const rels: string[] = [];
-  const media: BuiltPage['media'] = [];
+  const relOf = new Map<VsdxImage, string>();
 
   for (const id of order) {
     const it = page.items[id];
@@ -332,10 +356,12 @@ function buildPage(page: Page, images: Map<string, VsdxImage>, mediaStart: numbe
       let imageRel: string | undefined;
       const image = it.kind === 'image' ? images.get(it.id) : undefined;
       if (image) {
-        const rId = `rId${rels.length + 1}`;
-        const name = `image${mediaStart + media.length + 1}.${image.ext}`;
-        rels.push(`<Relationship Id="${rId}" Type="${REL_OFFICE}/image" Target="../media/${name}"/>`);
-        media.push({ name, image });
+        let rId = relOf.get(image);
+        if (!rId) {
+          rId = `rId${rels.length + 1}`;
+          rels.push(`<Relationship Id="${rId}" Type="${REL_OFFICE}/image" Target="../media/${mediaName(image)}"/>`);
+          relOf.set(image, rId);
+        }
         imageRel = `${rId}:${image.ext.toUpperCase()}`;
       }
       shapes.push(shapeXml(it, sid, frame, imageRel));
@@ -363,7 +389,7 @@ function buildPage(page: Page, images: Map<string, VsdxImage>, mediaStart: numbe
   const relsXml = rels.length
     ? `${XML_HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join('')}</Relationships>`
     : null;
-  return { xml, rels: relsXml, media, frame };
+  return { xml, rels: relsXml, frame };
 }
 
 const STYLE_SHEET =
@@ -408,13 +434,14 @@ export function buildVsdx(doc: Doc, images: Map<string, VsdxImage> = new Map()):
   const enc = new TextEncoder();
   const text = (name: string, content: string): ZipEntry => ({ name, data: enc.encode(content) });
 
-  const built: BuiltPage[] = [];
-  let mediaCount = 0;
-  for (const page of doc.pages) {
-    const p = buildPage(page, images, mediaCount);
-    mediaCount += p.media.length;
-    built.push(p);
-  }
+  // Every picture once, however many shapes (on however many pages) show it.
+  const media = new Map<VsdxImage, string>();
+  const mediaName = (image: VsdxImage) => {
+    let name = media.get(image);
+    if (!name) media.set(image, (name = `image${media.size + 1}.${image.ext}`));
+    return name;
+  };
+  const built = doc.pages.map((page) => buildPage(page, images, mediaName));
 
   // Page names must be unique in Visio.
   const names = new Set<string>();
@@ -425,7 +452,7 @@ export function buildVsdx(doc: Doc, images: Map<string, VsdxImage> = new Map()):
     return name;
   });
 
-  const exts = [...new Set(built.flatMap((p) => p.media.map((m) => m.image.ext)))];
+  const exts = [...new Set([...media.keys()].map((image) => image.ext))];
   const contentTypes =
     XML_HEAD +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -508,7 +535,7 @@ export function buildVsdx(doc: Doc, images: Map<string, VsdxImage> = new Map()):
     text('visio/pages/_rels/pages.xml.rels', pagesRels),
     ...built.map((p, i) => text(`visio/pages/page${i + 1}.xml`, p.xml)),
     ...built.flatMap((p, i) => (p.rels ? [text(`visio/pages/_rels/page${i + 1}.xml.rels`, p.rels)] : [])),
-    ...built.flatMap((p) => p.media.map((m) => ({ name: `visio/media/${m.name}`, data: m.image.bytes }))),
+    ...[...media].map(([image, name]) => ({ name: `visio/media/${name}`, data: image.bytes })),
   ]);
 }
 

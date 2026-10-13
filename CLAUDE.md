@@ -28,6 +28,7 @@ npm run build      # typecheck + production build
 | `src/model/history.ts` | Pure undo/redo over immer patches: `change`, batches, merge keys |
 | `src/model/store.ts` | The single zustand store: doc + history + UI state (active page/layer), and every action |
 | `src/shapes/library.ts` | Per-kind geometry (`SHAPES`: path, outline polygon, legacy ports, text box) and sidebar entries (`LIBRARY`) |
+| `src/shapes/deviceIcons.ts` | Built-in device pictures (own line art) and their starting platform rules |
 | `src/connectors/routing.ts` | Endpoint resolution, straight/elbow (A* around shapes)/curved routing, attach hit-testing |
 | `src/model/templates.ts` | Node/line templates: `{field}` placeholders, making and restyling items from templates, defaults |
 | `src/io/csv.ts` | RFC 4180 CSV parser |
@@ -90,6 +91,11 @@ npm run build      # typecheck + production build
    an `outline` polygon that matches its path, or arrow ends snap to the wrong edge.
 10. **Keyboard shortcuts must ignore typing**: the global handler in `ui/shortcuts.ts`
     bails out when focus is in an input/textarea/select. Keep that for any new handler.
+11. **Pictures may be stored by reference.** `Shape.image` is `{ src }` or `{ asset }` (an id
+    into `Doc.assets`); read it through `shapeImageSrc(shape, doc.assets)`, never `image.src`
+    alone. Shapes with `textPosition: 'right'` draw text outside their box, and box + text form
+    one attach frame (`attachFrame`): hit-test with `pointInShape`, measure with `shapeExtent`,
+    snap ends with `binding.ts` (`localOutline`/`localFrame`), never with raw `x/y/w/h`.
 
 ## Definition of done
 

@@ -63,8 +63,16 @@ export interface Shape extends Rect, ItemBase {
   style: ShapeStyle;
   /** Clockwise rotation in degrees around the shape's center. Absent means 0. */
   rotation?: number;
-  /** Picture shown by `kind: 'image'` shapes, as a data URL embedded in the document. */
-  image?: { src: string };
+  /**
+   * Picture shown by `kind: 'image'` shapes: a data URL embedded in the shape (`src`), or a
+   * reference to one stored once in `Doc.assets` (`asset`, used by device pictures).
+   */
+  image?: { src?: string; asset?: string };
+  /**
+   * Where the text goes: inside the shape (absent) or to its right, outside its box (arrows can
+   * attach to it there too). Files saved with the earlier 'below' are migrated to 'right'.
+   */
+  textPosition?: 'right';
   /**
    * Text boxes made by double-clicking the canvas: `w`/`h` are fitted to the text (no
    * wrapping) whenever the text or font changes. Cleared when the box is resized by hand.
@@ -146,6 +154,20 @@ export interface NodeTemplate {
   h: number;
   style: ShapeStyle;
   text: string;
+  /** A picture element: its nodes are pictures (`kind: 'image'`) showing this asset. */
+  image?: { asset: string };
+  /** Text inside the shape (absent) or to its right. Picture elements always use 'right'. */
+  textPosition?: 'right';
+  /**
+   * Platform rules: a device whose platform contains one of these (ignoring case) uses this
+   * element; the longest matching rule wins (your own elements before built-in ones).
+   */
+  platforms?: string[];
+  /**
+   * One of the built-in device elements. Their (generic) rules apply only when no other
+   * element's rules match, so e.g. your "9300" picture beats the built-in Switch's "nexus".
+   */
+  builtIn?: true;
 }
 
 /** A reusable look for lines; its labels may contain `{field}` placeholders. */
@@ -162,6 +184,8 @@ export interface LineTemplate {
 export interface Templates {
   nodes: NodeTemplate[];
   lines: LineTemplate[];
+  /** Node element for devices whose platform matches no rule. Absent: the first node element. */
+  defaultNodeId?: string;
 }
 
 export interface Doc {
@@ -171,4 +195,6 @@ export interface Doc {
   pages: Page[];
   /** Custom components, shared by all pages. Absent until the first one is made. */
   templates?: Templates;
+  /** Pictures stored once and referenced by id (from templates and `Shape.image.asset`). */
+  assets?: Record<string, string>;
 }

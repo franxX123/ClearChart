@@ -5,13 +5,23 @@ import { docBounds, itemBounds, snapToGrid, unionRects } from '../canvas/geometr
 import { normalizeAngle, shapeBox } from '../canvas/transform';
 import { fitText, TEXT_PAD } from '../canvas/text';
 import { connectorEnds, connectorPoints } from '../connectors/routing';
-import { buildGraph } from '../import/links';
+import { buildGraph, DEVICE_FIELDS } from '../import/links';
 import { planImport, type ImportSummary } from '../import/plan';
 import { parseCsv } from '../io/csv';
 import { fitWithin } from '../io/image';
 import { loadAutosave } from '../io/persist';
 import type { LibraryEntry } from '../shapes/library';
-import { addItems, DEFAULT_SHAPE_STYLE, isConnector, isShape, makeConnector, makeShape, sampleDoc } from './doc';
+import { builtInAssets } from '../shapes/deviceIcons';
+import {
+  addItems,
+  DEFAULT_SHAPE_STYLE,
+  DEVICE_FIELDS_TEXT,
+  isConnector,
+  isShape,
+  makeConnector,
+  makeShape,
+  sampleDoc,
+} from './doc';
 import * as hist from './history';
 import {
   clonePage,
@@ -34,6 +44,10 @@ import {
   renderNodeText,
   restyleLine,
   restyleNode,
+  defaultNode,
+  matchPlatform,
+  rulesMatch,
+  templateForPlatform,
   templateFromLine,
   templateFromShape,
 } from './templates';
@@ -49,6 +63,7 @@ import type {
   Page,
   Point,
   Rect,
+  Shape,
   ShapeStyle,
   Templates,
 } from './types';
@@ -183,6 +198,16 @@ interface State {
   setItemData: (id: string, key: string, value: string, mergeKey?: string) => void;
   /** Detaches items from their templates; they keep their current look, text and data. */
   unlinkTemplate: (ids: string[]) => void;
+  /** Adds a picture element from an uploaded picture (stored once), with the device fields beside it; returns its id. */
+  addDeviceTemplate: (name: string, src: string, w: number, h: number) => string;
+  /** Gives a node element a (new) picture; every node made from it updates. */
+  setTemplatePicture: (id: string, src: string, w: number, h: number) => void;
+  /** Turns a picture element back into a box with its text to its right. */
+  removeTemplatePicture: (id: string) => void;
+  /** Makes an element the one devices matching no platform rule use, and re-applies the rules. */
+  setDefaultNodeTemplate: (id: string) => void;
+  /** Adds the built-in device elements the document lacks, then re-applies the platform rules. */
+  addBuiltInDevices: () => void;
 
   zoomBy: (factor: number, screenPoint?: Point) => void;
   zoomTo: (zoom: number) => void;
@@ -204,13 +229,93 @@ export const currentLayer = (s: Pick<State, 'doc' | 'activePageId' | 'activeLaye
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** The node and line templates an import uses: the requested ones, else the first of each. */
-function pickTemplates(t: Templates, opts: ImportOptions): { node: NodeTemplate; line: LineTemplate } {
+/** Display size limit for an uploaded device picture, in px. */
+const DEVICE_PICTURE_MAX = 96;
+
+/**
+ * Chooses each imported device's element by its platform (the best-matching rule), falling
+ * back to `defaultId` (the import dialog's choice), the document's default, or the first.
+ */
+function devicePicker(t: Templates, defaultId?: string): (fields: Record<string, string>) => NodeTemplate {
+  const fallback = defaultTemplates().nodes[0];
+  return (fields) => templateForPlatform(t, fields[DEVICE_FIELDS.platform], defaultId) ?? fallback;
+}
+
+/** The line template an import uses: the requested one, else the first. */
+function pickLine(t: Templates, opts: ImportOptions): LineTemplate {
+  return t.lines.find((l) => l.id === opts.lineTemplateId) ?? t.lines[0] ?? defaultTemplates().lines[0];
+}
+
+/**
+ * Platform rules applied live, in a doc draft. A linked device whose platform matches a rule
+ * moves to the best-matching element (restyled in place). One whose platform matches no rule
+ * keeps its element — it may have been placed by hand — unless `toDefault(device)` says the
+ * reason it had that element is gone (it was on the old default, or a rule that matched it was
+ * just removed); then it moves to the default element. Unlinked shapes and devices without a
+ * platform are left alone.
+ */
+function reassignDevices(d: Doc, toDefault: (s: Shape) => boolean = () => false): void {
+  const templates = d.templates;
+  if (!templates?.nodes.length) return;
+  const nodeIds = new Set(templates.nodes.map((t) => t.id));
+  for (const page of d.pages) {
+    for (const id of page.order) {
+      const s = page.items[id];
+      if (!isShape(s) || !s.templateId || !nodeIds.has(s.templateId)) continue;
+      const platform = s.data?.[DEVICE_FIELDS.platform];
+      if (!platform) continue;
+      const best = matchPlatform(templates, platform) ?? (toDefault(s) ? defaultNode(templates) : undefined);
+      if (!best || best.id === s.templateId) continue;
+      s.templateId = best.id;
+      restyleNode(s, best);
+    }
+  }
+}
+
+/** The element devices matching no rule get now (explicit, or the first element). */
+const currentDefaultId = (d: Doc) => (d.templates ? defaultNode(d.templates)?.id : undefined);
+
+/** In a doc draft: re-applies a node template to every item made from it, on every page. */
+function restyleLinkedNodes(d: Doc, t: NodeTemplate): void {
+  for (const page of d.pages) {
+    for (const id of page.order) {
+      const s = page.items[id];
+      if (isShape(s) && s.templateId === t.id) restyleNode(s, t);
+    }
+  }
+}
+
+/** In a doc draft: drops stored pictures that no template or shape refers to any more. */
+function pruneAssets(d: Doc): void {
+  if (!d.assets) return;
+  const used = new Set<string>();
+  for (const t of d.templates?.nodes ?? []) if (t.image) used.add(t.image.asset);
+  for (const page of d.pages) {
+    for (const id of page.order) {
+      const it = page.items[id];
+      if (isShape(it) && it.image?.asset) used.add(it.image.asset);
+    }
+  }
+  for (const key of Object.keys(d.assets)) if (!used.has(key)) delete d.assets[key];
+}
+
+/** In a doc draft: adds the built-in device elements (and pictures) the document doesn't have, by name. */
+function addMissingBuiltIns(d: Doc): void {
   const def = defaultTemplates();
-  return {
-    node: t.nodes.find((n) => n.id === opts.nodeTemplateId) ?? t.nodes[0] ?? def.nodes[0],
-    line: t.lines.find((l) => l.id === opts.lineTemplateId) ?? t.lines[0] ?? def.lines[0],
-  };
+  const pictures = builtInAssets();
+  d.templates ??= { nodes: [], lines: [] };
+  d.assets ??= {};
+  const have = new Set(d.templates.nodes.map((t) => t.name.trim().toLowerCase()));
+  // A document with elements keeps its default (implicitly its first element until now).
+  const first = d.templates.nodes[0];
+  if (first && !d.templates.defaultNodeId) d.templates.defaultNodeId = first.id;
+  for (const t of def.nodes) {
+    if (have.has(t.name.toLowerCase())) continue;
+    d.templates.nodes.push(t);
+    if (t.image) d.assets[t.image.asset] = pictures[t.image.asset];
+    if (t.id === def.defaultNodeId && !d.templates.defaultNodeId) d.templates.defaultNodeId = t.id;
+  }
+  if (!d.templates.lines.length) d.templates.lines.push(...def.lines);
 }
 
 /** Whether another line joins the same two shapes as `c` (so `c` is one of several parallel links). */
@@ -430,7 +535,8 @@ export const useStore = create<State>()((set, get) => {
     setCanvasSize: (w, h) => set({ canvasSize: { w, h } }),
     setEditing: (editingId, isNew = false) => {
       const it = editingId ? currentPage(get()).items[editingId] : undefined;
-      if (isShape(it) && it.kind === 'image') return;
+      // Pictures have no text, unless it's drawn beside them.
+      if (isShape(it) && it.kind === 'image' && it.textPosition !== 'right') return;
       // Templated items get their text from template + fields (edited in Properties), not by hand.
       if (it?.templateId) return;
       set({ editingId, editingNew: !!editingId && isNew });
@@ -719,8 +825,9 @@ export const useStore = create<State>()((set, get) => {
     previewImport: (csv, opts = {}) => {
       const graph = buildGraph(parseCsv(csv));
       // Sizes depend on the templates; without any yet, preview with the defaults the import would create.
-      const { node, line } = pickTemplates(get().doc.templates ?? defaultTemplates(), opts);
-      return planImport(currentPage(get()), graph, node, line).summary;
+      const own = get().doc.templates;
+      const templates = own?.nodes.length && own.lines.length ? own : defaultTemplates();
+      return planImport(currentPage(get()), graph, devicePicker(templates, opts.nodeTemplateId), pickLine(templates, opts)).summary;
     },
 
     importLinks: (csv, opts = {}) => {
@@ -728,28 +835,35 @@ export const useStore = create<State>()((set, get) => {
       const graph = buildGraph(parseCsv(csv));
       cancelEditing();
       get().beginBatch();
-      // A document without templates gets the defaults (inside the same undo step).
+      // A document without elements gets the built-in ones (inside the same undo step). The
+      // element chosen for unmatched devices becomes the default, so the live rules agree later.
+      const oldDefault = currentDefaultId(get().doc);
       commit((d) => {
-        const def = defaultTemplates();
-        d.templates ??= { nodes: [], lines: [] };
-        if (!d.templates.nodes.length) d.templates.nodes.push(...def.nodes);
-        if (!d.templates.lines.length) d.templates.lines.push(...def.lines);
+        if (!d.templates?.nodes.length || !d.templates.lines.length) addMissingBuiltIns(d);
+        if (opts.nodeTemplateId && d.templates!.nodes.some((t) => t.id === opts.nodeTemplateId)) {
+          d.templates!.defaultNodeId = opts.nodeTemplateId;
+        }
       });
       const templates = get().doc.templates!;
-      const { node, line } = pickTemplates(templates, opts);
-      const plan = planImport(currentPage(get()), graph, node, line);
+      const plan = planImport(currentPage(get()), graph, devicePicker(templates, opts.nodeTemplateId), pickLine(templates, opts));
+      // Devices whose platform the file changed are placed like new ones (their old element may no longer apply).
+      const replatformed = new Set<string>();
       if (plan.updates.length) {
         commitPage((p) => {
           for (const u of plan.updates) {
             const s = p.items[u.id];
             if (!isShape(s)) continue;
+            if ((s.data?.[DEVICE_FIELDS.platform] ?? '') !== (u.data[DEVICE_FIELDS.platform] ?? '')) replatformed.add(s.id);
             s.data = u.data;
-            // Re-render with the device's own template, which may differ from the one picked now.
+            // Re-render with the device's own template; a changed platform may move it below.
             const t = templates.nodes.find((n) => n.id === s.templateId);
             if (t) renderNodeText(s, t);
           }
         });
       }
+      // Changed platforms (and a changed default) move existing devices.
+      const newDefault = currentDefaultId(get().doc);
+      commit((d) => reassignDevices(d, (s) => replatformed.has(s.id) || (oldDefault !== newDefault && s.templateId === oldDefault)));
       const added = [...plan.newNodes, ...plan.newLines];
       if (added.length) addToActiveLayer(added);
       get().endBatch();
@@ -763,9 +877,16 @@ export const useStore = create<State>()((set, get) => {
     saveTemplate: (itemId, name) => {
       const it = currentPage(get()).items[itemId];
       if (!it) return null;
-      const t = isShape(it) ? templateFromShape(it, name) : templateFromLine(it, name);
+      // A picture becomes a picture element; its picture is stored once as an asset.
+      const existingAsset = isShape(it) ? it.image?.asset : undefined;
+      const newAsset = isShape(it) && it.kind === 'image' && !existingAsset && it.image?.src ? nanoid(10) : undefined;
+      const t = isShape(it) ? templateFromShape(it, name, undefined, existingAsset ?? newAsset) : templateFromLine(it, name);
       commit((d) => {
         d.templates ??= { nodes: [], lines: [] };
+        if (newAsset && isShape(it)) {
+          d.assets ??= {};
+          d.assets[newAsset] = it.image!.src!;
+        }
         if (isShape(it)) d.templates.nodes.push(t as NodeTemplate);
         else d.templates.lines.push(t as LineTemplate);
       });
@@ -776,6 +897,7 @@ export const useStore = create<State>()((set, get) => {
       commit((d) => {
         const nt = d.templates?.nodes.find((t) => t.id === id);
         const lt = d.templates?.lines.find((t) => t.id === id);
+        const oldRules = [...(nt?.platforms ?? [])];
         if (nt) Object.assign(nt, patch);
         else if (lt) Object.assign(lt, patch);
         else return;
@@ -792,6 +914,85 @@ export const useStore = create<State>()((set, get) => {
             }
           }
         }
+        // New platform rules apply at once to every device they now match. A device this element
+        // got through a rule that no longer matches it goes to its best match or the default; one
+        // placed on it by hand stays.
+        if (nt && 'platforms' in patch) {
+          reassignDevices(d, (s) => s.templateId === id && rulesMatch(oldRules, s.data?.[DEVICE_FIELDS.platform]));
+        }
+      });
+    },
+
+    addDeviceTemplate: (name, src, w, h) => {
+      const asset = nanoid(10);
+      const size = fitWithin(w, h, DEVICE_PICTURE_MAX);
+      const t: NodeTemplate = {
+        id: nanoid(10),
+        name,
+        kind: 'image',
+        ...size,
+        style: { ...DEFAULT_SHAPE_STYLE, fill: 'none', stroke: 'none', fontSize: 12 },
+        text: DEVICE_FIELDS_TEXT,
+        image: { asset },
+        textPosition: 'right',
+        platforms: [],
+      };
+      commit((d) => {
+        d.assets ??= {};
+        d.assets[asset] = src;
+        d.templates ??= { nodes: [], lines: [] };
+        d.templates.nodes.push(t);
+      });
+      return t.id;
+    },
+
+    setTemplatePicture: (id, src, w, h) => {
+      const asset = nanoid(10);
+      const size = fitWithin(w, h, DEVICE_PICTURE_MAX);
+      commit((d) => {
+        const t = d.templates?.nodes.find((n) => n.id === id);
+        if (!t) return;
+        d.assets ??= {};
+        d.assets[asset] = src;
+        Object.assign(t, { kind: 'image', image: { asset }, textPosition: 'right', ...size });
+        // A picture has no fill or border of its own.
+        t.style = { ...t.style, fill: 'none', stroke: 'none' };
+        restyleLinkedNodes(d, t);
+        pruneAssets(d);
+      });
+    },
+
+    removeTemplatePicture: (id) => {
+      commit((d) => {
+        const t = d.templates?.nodes.find((n) => n.id === id);
+        if (!t?.image) return;
+        delete t.image;
+        Object.assign(t, { kind: 'roundRect', w: 72, h: 48, textPosition: 'right' });
+        // Without a picture the element is a box, so give it a visible outline and fill.
+        t.style = {
+          ...t.style,
+          fill: t.style.fill === 'none' ? '#eef4ff' : t.style.fill,
+          stroke: t.style.stroke === 'none' ? '#3b5b9a' : t.style.stroke,
+        };
+        restyleLinkedNodes(d, t);
+        pruneAssets(d);
+      });
+    },
+
+    setDefaultNodeTemplate: (id) => {
+      commit((d) => {
+        if (!d.templates?.nodes.some((t) => t.id === id)) return;
+        const oldDefault = currentDefaultId(d);
+        d.templates.defaultNodeId = id;
+        // Devices that had the old default (matching no rule) follow the new one.
+        reassignDevices(d, (s) => s.templateId === oldDefault);
+      });
+    },
+
+    addBuiltInDevices: () => {
+      commit((d) => {
+        addMissingBuiltIns(d);
+        reassignDevices(d);
       });
     },
 
@@ -810,9 +1011,12 @@ export const useStore = create<State>()((set, get) => {
         if (!d.templates) return;
         d.templates.nodes = d.templates.nodes.filter((t) => t.id !== id);
         d.templates.lines = d.templates.lines.filter((t) => t.id !== id);
+        if (d.templates.defaultNodeId === id) delete d.templates.defaultNodeId;
         for (const p of d.pages) {
           for (const iid of p.order) if (p.items[iid].templateId === id) delete p.items[iid].templateId;
         }
+        // Items made from it keep their picture (they refer to its asset), so only unused ones go.
+        pruneAssets(d);
       });
       if (get().arrowTemplateId === id) set({ arrowTemplateId: null });
     },
@@ -843,7 +1047,16 @@ export const useStore = create<State>()((set, get) => {
         it.data = { ...it.data, [key]: value };
         if (isShape(it)) {
           const t = templates?.nodes.find((n) => n.id === it.templateId);
-          if (t) renderNodeText(it, t);
+          // A platform that matches a rule switches the device to that element (live platform
+          // rules). One that matches nothing — e.g. while it's still being typed — keeps the element.
+          const best =
+            t && templates && key.toLowerCase() === DEVICE_FIELDS.platform.toLowerCase() ? matchPlatform(templates, value) : undefined;
+          if (best && best.id !== t!.id) {
+            it.templateId = best.id;
+            restyleNode(it, best);
+          } else if (t) {
+            renderNodeText(it, t);
+          }
         } else {
           const t = templates?.lines.find((l) => l.id === it.templateId);
           if (t) renderLineText(it, t);

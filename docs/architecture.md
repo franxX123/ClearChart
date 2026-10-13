@@ -35,13 +35,14 @@ the rendered DOM (see Export below).
 ## Data model (`src/model/types.ts`)
 
 ```ts
-Doc       { version: 2, title, pages: Page[] }                          // ≥ 1 page
+Doc       { version: 2, title, pages: Page[], templates?, assets? }      // ≥ 1 page; assets: id → data URL
 Page      { id, name, items: Record<id, Item>, order: id[], layers: Layer[] }  // order = z-order, back→front
 Layer     { id, name, visible, locked }                                  // layers[] bottom→top, ≥ 1
 Item      = Shape | Connector                                            // discriminated by `type`
 ItemBase  { id, layerId?, groupIds? }                                    // groupIds: outermost first
 Shape     ItemBase & { type:'shape', kind, x, y, w, h, rotation?, text, style: ShapeStyle }
-Shape.image? { src }                                                    // kind 'image': a data URL
+Shape.image? { src?, asset? }                                           // kind 'image': a data URL, or an id in Doc.assets
+Shape.textPosition? 'right'                                             // text drawn right of the box; arrows attach to it too
 Connector ItemBase & { type:'connector', source: Endpoint, target: Endpoint, routing, bend?, label, style }
 Endpoint  { shapeId?, at?, port?, x, y }                                  // routing: straight | elbow | curved
 ```
@@ -81,7 +82,36 @@ Endpoint  { shapeId?, at?, port?, x, y }                                  // rou
   keeps SVGs and small rasters as-is; rasters over 2000 px or 400 KB are redrawn on a canvas
   (downscaled to 2000 px) and re-encoded as JPEG when fully opaque or PNG otherwise, keeping
   whichever is smaller. `ShapeView` draws an `<image>` plus a border path that takes clicks.
-  Pictures have no text (`setEditing` ignores them) and resize with their aspect ratio kept.
+  Pictures resize with their aspect ratio kept. A picture added from the sidebar has no text
+  (`setEditing` ignores it); device pictures have text to their right.
+- **Stored pictures (`Doc.assets`).** Device pictures are stored once per document as
+  `assets[id] = dataUrl`. Elements (`NodeTemplate.image.asset`) and their devices
+  (`Shape.image.asset`) refer to them by id, so 100 devices of one model add one picture to
+  the file and the autosave. `model/doc.ts:shapeImageSrc` resolves a shape's picture (`src`
+  first, then the asset); `Canvas` passes the result to `ShapeView` as `imageSrc`, and
+  `exportVisio` decodes each distinct picture once. The store's `pruneAssets` drops assets that
+  no element or shape refers to (after an element is deleted or its picture changes). The
+  built-in icons (`shapes/deviceIcons.ts`, drawn for ClearChart as SVG line art) are assets
+  `builtin-<key>`, stored with each document like any other picture.
+- **Text beside a shape (`textPosition: 'right'`).** The text is drawn to the right of the
+  box, left-aligned and vertically centered on it, one line per line break
+  (`canvas/transform.ts:sideLabelBox`, 8 px gap). Box and text together form the shape's
+  **attach frame** (`attachFrame`: a local rect, rotated with the shape), which is the object
+  for everything but resizing:
+  - `pointInShape` (hit-testing, `findAttachment`) and `shapeExtent` (`itemBounds`, so
+    fit-to-view, export bounds, marquee, snapping and the import layout) use the frame.
+  - Pinned ends snap onto the frame's rectangle (`binding.ts:localOutline`). Their `at`
+    fractions are still of the shape's box, so a point on the text has `at.x > 1` and follows
+    moves and resizes.
+  - `pinnedDir` uses the frame's nearest side.
+  - Floating ends use the frame's side midpoints (`routing.ts:localPorts`, same
+    top/right/bottom/left indices) and spread along its sides.
+  - `routeObstacles` and the anchors' `box` use the frame's bounds.
+
+  Selection handles stay on the box (they resize the picture). `ShapeView` puts a transparent
+  hit rect behind the text and the gap before it, so clicking there selects the device;
+  `TextEditor` edits the text in place to the right. Files saved with the first version
+  (`'below'`) are migrated to `'right'` by `parseDoc`.
 - **Curved lines** store only `bend`: how far the curve's midpoint sits from the straight
   chord. The curve is a quadratic computed from the resolved ends on every render.
 - **`text` kind** is a rect with `fill: 'none'` and `stroke: 'none'`; its path still uses
@@ -212,7 +242,10 @@ explicit `font-family`) — CSS from `styles.css` is not carried into the export
      subpath, open ones unfilled), line/fill colors, `*Trans` cells from `opacity`, a text block
      matching the kind's `textBox`, and `data` as a Shape Data (Property) section;
    - pictures as `Foreign` shapes with the image in `visio/media/` (a dashed placeholder box if
-     the picture couldn't be read);
+     the picture couldn't be read). Each distinct picture is written once (shapes sharing a
+     `VsdxImage` object share the media part, with one relationship per page). Text beside a
+     shape becomes a left-aligned text block pinned just past its right edge (`TxtPinX` =
+     `Width+gap`), and pictures keep their text and Shape Data;
    - each line as a routable 1-D shape (`ObjType` 2) with its current route as geometry; attached
      ends are glued to the shape's sheet (`_WALKGLUE`/`_XFTRIGGER` formulas + `Connects`) so
      Visio keeps them attached; route style from `routing`; arrowheads, dash and opacity mapped;
@@ -229,6 +262,31 @@ saved and undoable). A node template stores a shape kind, size, style and text w
 placeholders; a line template stores routing, style and label / start-label / end-label
 texts. `model/templates.ts:applyTemplate` fills placeholders (case-insensitive) and drops a
 text line whose fields are all empty.
+
+**Device elements and platform rules.** A node template may be a picture element
+(`image: { asset }`, always `textPosition: 'right'`; its nodes are `kind: 'image'` at the
+template's size, and they don't grow with their text) and may carry `platforms` (rule texts).
+`templateForPlatform(templates, platform, defaultId?)` picks the element whose rule is the
+longest case-insensitive substring of the platform. Elements without `builtIn` are tried first,
+so a user's "9300" beats the built-in Switch's "nexus". With no match, it picks
+`Templates.defaultNodeId` (else the first element). `matchPlatform` is the same without the
+default fallback. Rules apply **live**, but only **positive matches move a device**. The
+store's `reassignDevices(d, toDefault)` runs in the same commit as `updateTemplate` (when
+rules change), `setDefaultNodeTemplate`, `addBuiltInDevices` and `importLinks`; `setItemData`
+does the same inline for `hostPlatform`. It moves every *linked* device whose platform
+matches a rule to its best element and restyles it. A device matching no rule keeps its
+element: it may have been placed by hand, or its platform may be half-typed (the Data panel
+calls `setItemData` on every keystroke, and falling back to the default there turned picture
+devices into the default box). It moves to the default only when `toDefault` says the reason
+it had its element is gone:
+- `setDefaultNodeTemplate`: it was on the old default.
+- `updateTemplate`: the element's *old* rules matched it (`rulesMatch`) and the new ones don't.
+- `importLinks`: the file changed its platform, or it was on a default the dialog replaced.
+
+Unlinked shapes are never touched. `defaultTemplates()` (`model/doc.ts`) builds the built-in elements from
+`shapes/deviceIcons.ts`. Older documents keep their own elements; the store's
+`addBuiltInDevices` adds the missing built-ins (by name) on request, keeping the document's
+current default.
 
 **Materialized, not computed at render.** A templated item stores the rendered result (its
 `text`, labels, kind, style), so rendering, export, hit-testing and old code paths need no
@@ -247,16 +305,20 @@ centers and data; lines fanned out among parallel links stay curved); `deleteTem
    link reported from both sides is one link (`merged` counts the extra rows). Link data holds
    `hostInterface`/`neighborInterface` (oriented as first seen) and every extra column. Rows
    missing a name, or linking a device to itself, are `skipped` with their line numbers.
-3. `import/plan.ts:planImport(page, graph, nodeTemplate, lineTemplate)` → which devices exist
+3. `import/plan.ts:planImport(page, graph, pickNode, lineTemplate)` (`pickNode(fields)` chooses
+   each new device's element, by platform) → which devices exist
    on the page (shapes whose `data.hostName` matches), field updates for them, new nodes
    (`nodeFromTemplate`) placed by `layout/force.ts:forceLayout` (every existing shape is a fixed
    node; free nodes start near the existing devices they link to, else to the right of the
    page's content), and new lines (`lineFromTemplate`) with floating ends; links already drawn
    between the same devices on the same interfaces are skipped, and extra links between a pair
-   get alternating bends (`parallelBend`).
-4. `store.importLinks` creates default templates if the doc has none, applies the plan
-   (updates, then `addToActiveLayer`) inside one history batch, selects the new items and fits
-   the view. `previewImport` runs steps 1–3 for the dialog without committing.
+   get alternating bends (`parallelBend`). The layout sizes nodes by their extent (box plus text
+   beside it). The summary counts new devices per element (`byTemplate`).
+4. `store.importLinks` adds the built-in elements if the doc has no node or line templates,
+   makes the dialog's choice for unmatched devices the default element, applies the plan
+   (updates, `reassignDevices`, then `addToActiveLayer`) inside one history batch, selects the
+   new items and fits the view. `previewImport` runs steps 1–3 for the dialog without
+   committing.
 
 **Floating-end spreading.** `connectors/routing.ts:floatingSlots(page)` groups floating ends
 by shape side; sides used by several lines spread them along the side (ordered by where each

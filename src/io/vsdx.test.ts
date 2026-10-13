@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addItems, defaultTemplates, makeConnector, makeShape, sampleDoc } from '../model/doc';
+import { addItems, DEFAULT_SHAPE_STYLE, defaultTemplates, makeConnector, makeShape, sampleDoc } from '../model/doc';
 import { makeLayer, makePage } from '../model/page';
 import { lineFromTemplate, nodeFromTemplate } from '../model/templates';
-import type { Doc } from '../model/types';
+import type { Doc, NodeTemplate } from '../model/types';
 import { buildVsdx, decodeDataUrl, visioImageExt } from './vsdx';
 import { readZip } from './zip';
 
@@ -28,9 +28,10 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 function networkDoc(): Doc {
   const doc = sampleDoc();
   const t = defaultTemplates();
+  const box: NodeTemplate = { id: 'box', name: 'Device', kind: 'roundRect', w: 160, h: 64, style: { ...DEFAULT_SHAPE_STYLE }, text: '{hostName}\n{hostIP}' };
   const page = makePage('Network & <core>');
-  const a = nodeFromTemplate(t.nodes[0], { hostName: 'core1', hostIP: '10.0.0.1' }, { x: 100, y: 100 });
-  const b = nodeFromTemplate(t.nodes[0], { hostName: 'dist1' }, { x: 400, y: 300 });
+  const a = nodeFromTemplate(box, { hostName: 'core1', hostIP: '10.0.0.1' }, { x: 100, y: 100 });
+  const b = nodeFromTemplate(box, { hostName: 'dist1' }, { x: 400, y: 300 });
   b.style.opacity = 0.5;
   b.rotation = 30;
   const link = lineFromTemplate(t.lines[0], { hostInterface: 'Eth1/1', neighborInterface: 'Te1/1/1' }, { shapeId: a.id, x: 0, y: 0 }, { shapeId: b.id, x: 0, y: 0 });
@@ -103,6 +104,39 @@ describe('buildVsdx', () => {
     // Without picture bytes, the picture becomes a dashed placeholder (one LinePattern cell only).
     const picture = page.slice(page.indexOf('NameU="Picture.'));
     expect(picture.slice(0, picture.indexOf('</Shape>')).match(/N="LinePattern"/g)).toHaveLength(1);
+  });
+
+  it('stores a picture once for all devices showing it, with their text beside them', () => {
+    const doc = sampleDoc();
+    const sw = doc.templates!.nodes.find((n) => n.name === 'Switch')!;
+    const a = nodeFromTemplate(sw, { hostName: 'sw1', hostIP: '10.0.0.1' }, { x: 600, y: 0 });
+    const b = nodeFromTemplate(sw, { hostName: 'sw2' }, { x: 800, y: 0 });
+    const c = nodeFromTemplate(sw, { hostName: 'sw3' }, { x: 0, y: 0 });
+    addItems(doc.pages[0], [a, b]);
+    const second = makePage('Two');
+    addItems(second, [c]);
+    doc.pages.push(second);
+    // The exporter passes one decoded object per distinct picture.
+    const img = { bytes: decodeDataUrl(PNG)!.bytes, ext: 'png' as const };
+    const files = readZip(buildVsdx(doc, new Map([a, b, c].map((s) => [s.id, img]))));
+    for (const [name, data] of files) if (!name.endsWith('.png')) assertWellFormed(new TextDecoder().decode(data), name);
+    expect([...files.keys()].filter((n) => n.startsWith('visio/media/'))).toEqual(['visio/media/image1.png']);
+    // One relationship per page, shared by the page's pictures.
+    expect(text(files, 'visio/pages/_rels/page1.xml.rels').match(/<Relationship /g)).toHaveLength(1);
+    expect(text(files, 'visio/pages/_rels/page2.xml.rels')).toContain('Target="../media/image1.png"');
+    const page1 = text(files, 'visio/pages/page1.xml');
+    expect(page1.match(/<Rel r:id="rId1"\/>/g)).toHaveLength(2);
+    // The device: a picture carrying its fields, with its text block left-aligned to its right.
+    const at = page1.indexOf('<Text>sw1\n10.0.0.1</Text>');
+    expect(at).toBeGreaterThan(0);
+    const shape = page1.slice(page1.lastIndexOf('<Shape ', at), page1.indexOf('</Shape>', at));
+    expect(shape).toContain('Type="Foreign"');
+    expect(shape).toContain('<Row N="hostName">');
+    expect(shape).toContain(`<Cell N="TxtPinX" V="${+((a.w + 8) / 96).toFixed(6)}" F="Width+${+(8 / 96).toFixed(6)}"/>`);
+    expect(shape).toContain('<Cell N="TxtPinY" V="' + +(a.h / 2 / 96).toFixed(6) + '" F="Height*0.5"/>');
+    expect(shape).toContain('<Cell N="TxtLocPinX" V="0" F="TxtWidth*0"/>');
+    expect(shape).toContain('<Cell N="HorzAlign" V="0"/>');
+    expect(shape.indexOf('<Text>')).toBeLessThan(shape.indexOf('<ForeignData'));
   });
 
   it('gives an empty page a letter-size sheet', () => {

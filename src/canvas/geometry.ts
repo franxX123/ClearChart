@@ -2,9 +2,19 @@ import { connectorPoints } from '../connectors/routing';
 import { isConnector, isShape } from '../model/doc';
 import { isInteractive, isVisible, renderOrder } from '../model/page';
 import type { Page, Point, Rect, Shape } from '../model/types';
-import { pointInShape, shapeBox } from './transform';
+import { pointInShape, shapeExtent } from './transform';
 
-export { localToWorld, pointInShape, resizeRect, rotatePoint, shapeBox, worldToLocal } from './transform';
+export {
+  attachFrame,
+  localToWorld,
+  pointInShape,
+  resizeRect,
+  rotatePoint,
+  shapeBox,
+  shapeExtent,
+  sideLabelBox,
+  worldToLocal,
+} from './transform';
 
 export const GRID = 10;
 
@@ -52,10 +62,13 @@ export function hitShape(page: Page, p: Point, pad = 0): Shape | null {
   return null;
 }
 
-/** Axis-aligned bounds of everything an item draws, in world coordinates. */
+/**
+ * Axis-aligned bounds of everything an item draws, in world coordinates — including text
+ * drawn beside a shape (which arrows can attach to as well).
+ */
 export function itemBounds(page: Page, id: string): Rect | null {
   const it = page.items[id];
-  if (isShape(it)) return shapeBox(it);
+  if (isShape(it)) return shapeExtent(it);
   if (isConnector(it)) return boundsOfPoints(connectorPoints(page, it));
   return null;
 }
