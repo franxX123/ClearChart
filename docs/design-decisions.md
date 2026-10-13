@@ -181,3 +181,23 @@ shape fixed, then an overlap-removal pass and grid snapping.
 re-import never moves what the user already arranged.
 **Trade-off:** O(n²) per iteration (fine for hundreds of devices); it optimizes distances, not
 crossings or tiers.
+
+## 23. Visio export writes the package directly, with no dependencies
+
+**Chosen:** `io/vsdx.ts` writes the .vsdx XML parts itself and `io/zip.ts` stores them in a ZIP
+without compression; shape outlines are our SVG paths flattened to polylines; lines are
+master-less routable connectors glued with Visio's own glue formulas.
+**Why:** no library dependency or server, deterministic output that unit tests can read back and
+validate, and every shape kind (including pictures and rotated shapes) exports the same way.
+**Trade-off:** files are larger than Visio's own (no compression); curves are polylines, so
+resizing in Visio scales them but doesn't keep "true" arcs; connectors aren't Visio's "Dynamic
+connector" master, so some Visio connector menus may differ. It was validated structurally
+(ZIP, XML, relationships, content types) — not by opening in Visio during development.
+
+## 24. Opacity fades the whole item
+
+**Chosen:** one `opacity` (0–1) per shape or line style, rendered as an SVG `opacity` attribute
+on the item's group, so fill, border, text, arrowheads and labels fade together (and SVG/PNG/Visio
+exports keep it).
+**Why:** the common case ("fade this out") with one control; works the same for pictures.
+**Trade-off:** no separate fill-only transparency (a fill color with alpha could add that later).

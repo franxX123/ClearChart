@@ -1,6 +1,6 @@
 import { emptyDoc } from '../model/doc';
 import { currentPage, useStore } from '../model/store';
-import { exportPng, exportSvg } from '../io/export';
+import { exportPng, exportSvg, exportVisio } from '../io/export';
 import { openDocFile, openTextFile, saveDocFile } from '../io/persist';
 import { useDialog } from './dialogState';
 
@@ -39,6 +39,13 @@ export function Toolbar() {
   };
 
   const empty = (ok: boolean) => !ok && alert('Nothing to export on this page yet.');
+  const exportToVisio = async () => {
+    try {
+      await exportVisio(st().doc);
+    } catch (err) {
+      alert(`Couldn't export to Visio: ${(err as Error).message}`);
+    }
+  };
   /** Export file name: the title, plus the page name when there's more than one page. */
   const exportName = () => {
     const { doc } = st();
@@ -68,6 +75,9 @@ export function Toolbar() {
         </button>
         <button onClick={async () => empty(await exportPng(currentPage(st()), exportName()))} title="Exports the current page">
           Export PNG
+        </button>
+        <button onClick={exportToVisio} title="Every page as an editable Visio drawing (.vsdx)">
+          Export Visio
         </button>
       </div>
       <div className="group" role="radiogroup" aria-label="Tool">

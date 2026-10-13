@@ -202,6 +202,25 @@ Because export reuses the rendered DOM, it is WYSIWYG for free, but it requires 
 be mounted, and anything in the content layer must be self-contained SVG (inline attributes,
 explicit `font-family`) — CSS from `styles.css` is not carried into the exported file.
 
+4. **Visio (.vsdx):** `exportVisio(doc)` covers **every page** and doesn't use the DOM. It
+   prepares picture bytes (PNG/JPEG/GIF as they are; SVG/WebP drawn to a canvas as PNG), then
+   `io/vsdx.ts:buildVsdx` (pure) writes the OPC package and `io/zip.ts:zip` stores it:
+   - one Visio page per page, sized to its visible content + 40 px; px → inches at 96/in, y flipped;
+   - each visible shape (in paint order) as a Visio shape: pin at its center, `Angle` from
+     `rotation` (sign flipped: Visio is counterclockwise), geometry from its SVG path flattened
+     by `io/svgPath.ts` into relative `RelMoveTo`/`RelLineTo` rows (one Geometry section per
+     subpath, open ones unfilled), line/fill colors, `*Trans` cells from `opacity`, a text block
+     matching the kind's `textBox`, and `data` as a Shape Data (Property) section;
+   - pictures as `Foreign` shapes with the image in `visio/media/` (a dashed placeholder box if
+     the picture couldn't be read);
+   - each line as a routable 1-D shape (`ObjType` 2) with its current route as geometry; attached
+     ends are glued to the shape's sheet (`_WALKGLUE`/`_XFTRIGGER` formulas + `Connects`) so
+     Visio keeps them attached; route style from `routing`; arrowheads, dash and opacity mapped;
+   - start/end labels as separate small text shapes at the positions `connectors/labels.ts`
+     computes for the canvas (Visio connectors have one text block).
+   Groups, layers and hidden layers' items are not exported. The package is checked in tests by
+   reading it back (`readZip`) and validating every part.
+
 ## Templates, item data and CSV import
 
 **Data model.** Any item may carry `data` (string fields) and a `templateId` into

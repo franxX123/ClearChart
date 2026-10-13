@@ -569,3 +569,20 @@ button.danger {
   white-space: nowrap;
   font-weight: 600;
 }
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.slider-row input[type='number'] {
+  width: 56px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 5px;
+  background: var(--panel);
+}

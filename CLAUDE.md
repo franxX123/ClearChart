@@ -31,6 +31,8 @@ npm run build      # typecheck + production build
 | `src/connectors/routing.ts` | Endpoint resolution, straight/elbow (A* around shapes)/curved routing, attach hit-testing |
 | `src/model/templates.ts` | Node/line templates: `{field}` placeholders, making and restyling items from templates, defaults |
 | `src/io/csv.ts` | RFC 4180 CSV parser |
+| `src/io/vsdx.ts`, `zip.ts`, `svgPath.ts` | Visio export: document → .vsdx parts (pure), stored-ZIP writer/reader, SVG path flattening |
+| `src/connectors/labels.ts` | Where a line's middle and end labels go (shared by the canvas and the Visio export) |
 | `src/import/links.ts`, `plan.ts` | Links CSV → device/link graph (dedupe, merge reciprocal rows) → what to add/update on a page |
 | `src/layout/force.ts` | Deterministic force-directed layout for imported devices |
 | `src/connectors/binding.ts` | Pinned arrow ends: snap onto a shape's outline, pinned point/direction as the shape moves |
@@ -41,7 +43,7 @@ npm run build      # typecheck + production build
 | `src/canvas/arrange.ts` | Align/distribute offsets |
 | `src/canvas/ShapeView.tsx`, `TextEditor.tsx` | Shape rendering; HTML textarea overlay for in-place text editing |
 | `src/ui/` | Toolbar (tools, Import CSV), shape library (+ Graphs templates), properties (+ Data) + layers panels, page tabs, context menu, dialogs (`Modal`, `ImportDialog`, `TemplateDialogs`, opened via `dialogState.ts`), keyboard shortcuts |
-| `src/io/` | JSON file save/open, localStorage autosave, SVG/PNG export, picture loading (`image.ts`) |
+| `src/io/` | JSON file save/open, localStorage autosave, SVG/PNG/Visio export, picture loading (`image.ts`) |
 
 ## Rules that are easy to break
 

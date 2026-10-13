@@ -26,6 +26,13 @@ npm run build    # type-check and build to dist/
   see-through, so you type right on the shape.
 - **Add text anywhere:** double-click empty canvas and start typing. The text box grows as you type (Enter
   for a new line); click away to finish. Leave it empty and it disappears.
+- **Opacity:** select shapes, pictures or lines and drag the **Opacity** slider in the right panel (0–100 %)
+  to fade the whole item.
+- **Export to Visio:** **Export Visio** (toolbar) downloads `<title>.vsdx` with every page as an editable
+  Visio drawing: shapes keep their outline, colors, opacity, rotation and text; lines become Visio
+  connectors glued to their shapes (they follow when you move shapes in Visio); device fields from a CSV
+  import become Visio *Shape Data*; pictures are embedded. Interface (start/end) labels become small text
+  boxes next to the lines. Hidden layers are left out; groups and layers are not carried over.
 - **Navigate:** the mouse wheel zooms around the cursor; drag with the right mouse button (or Space+drag, or
   the middle button) to pan; Shift+1 fits.
 - **Right-click** for Undo, Redo, Cut, Copy, Paste (at the cursor), Duplicate, Delete, Bring to front and
@@ -89,7 +96,7 @@ Start with [`CLAUDE.md`](CLAUDE.md) (conventions and gotchas), then:
 | `src/connectors/` | Endpoint resolution, straight/elbow routing, connector rendering |
 | `src/canvas/` | SVG canvas and pointer interactions, snapping/guides, text wrapping and editing |
 | `src/ui/` | Toolbar, shape library, properties panel, keyboard shortcuts |
-| `src/io/` | JSON save/load, autosave, SVG/PNG export |
+| `src/io/` | JSON save/load, autosave, SVG/PNG/Visio export, CSV parsing, picture loading |
 
 ## Not yet built
 

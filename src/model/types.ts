@@ -36,6 +36,8 @@ export interface ShapeStyle {
   italic: boolean;
   /** Horizontal text alignment. Absent means centered. */
   textAlign?: 'left' | 'center';
+  /** 0–1, fading the whole shape (fill, border, text, picture). Absent means 1 (opaque). */
+  opacity?: number;
 }
 
 /** Fields every item on a page has. */
@@ -95,6 +97,8 @@ export interface ConnectorStyle {
   dash: LineDash;
   startArrow: ArrowHead;
   endArrow: ArrowHead;
+  /** 0–1, fading the whole line (stroke, arrowheads, labels). Absent means 1 (opaque). */
+  opacity?: number;
 }
 
 export interface Connector extends ItemBase {

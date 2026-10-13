@@ -1,6 +1,7 @@
 import { canvasRefs } from '../canvas/Canvas';
 import { docBounds } from '../canvas/geometry';
-import type { Page } from '../model/types';
+import type { Doc, Page } from '../model/types';
+import { buildVsdx, decodeDataUrl, visioImageExt, type VsdxImage } from './vsdx';
 import { downloadBlob, fileSafe } from './persist';
 
 const PADDING = 20;
@@ -61,4 +62,52 @@ export async function exportPng(page: Page, name: string, scale = 2): Promise<bo
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Loads an image (via the load event: `decode()` never settles while the page is hidden). */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load a picture'));
+    img.src = src;
+  });
+}
+
+/**
+ * A picture's bytes in a format Visio embeds: PNG/JPEG/GIF as they are; anything else (SVG,
+ * WebP) drawn onto a canvas and saved as PNG. Null if the picture can't be read.
+ */
+async function visioImage(src: string, w: number, h: number): Promise<VsdxImage | null> {
+  const decoded = decodeDataUrl(src);
+  if (!decoded) return null;
+  const ext = visioImageExt(decoded.mime);
+  if (ext) return { bytes: decoded.bytes, ext };
+  try {
+    const img = await loadImage(src);
+    const canvas = document.createElement('canvas');
+    // Vector pictures have no natural pixel size worth trusting; render at twice the shape size.
+    canvas.width = Math.max(1, Math.round(img.naturalWidth || w * 2));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight || h * 2));
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+    return blob ? { bytes: new Uint8Array(await blob.arrayBuffer()), ext: 'png' } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Downloads the whole document (every page) as an editable Visio file, `<title>.vsdx`. */
+export async function exportVisio(doc: Doc): Promise<void> {
+  const images = new Map<string, VsdxImage>();
+  for (const page of doc.pages) {
+    for (const id of page.order) {
+      const it = page.items[id];
+      if (it.type !== 'shape' || it.kind !== 'image' || !it.image) continue;
+      const img = await visioImage(it.image.src, it.w, it.h);
+      if (img) images.set(it.id, img);
+    }
+  }
+  const bytes = buildVsdx(doc, images);
+  downloadBlob(new Blob([bytes], { type: 'application/vnd.ms-visio.drawing' }), `${fileSafe(doc.title)}.vsdx`);
 }

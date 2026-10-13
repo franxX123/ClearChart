@@ -43,6 +43,22 @@ function NumberField(props: { label: string; value: number; min: number; max: nu
   );
 }
 
+/** 0–100 % slider with a number box, for a 0–1 opacity value (absent = fully opaque). */
+function OpacityField({ value, onChange }: { value: number | undefined; onChange: (v: number) => void }) {
+  const pct = Math.round((value ?? 1) * 100);
+  const set = (v: number) => Number.isFinite(v) && onChange(Math.min(100, Math.max(0, v)) / 100);
+  return (
+    <div className="field">
+      <span>Opacity</span>
+      <div className="slider-row">
+        <input type="range" min={0} max={100} value={pct} aria-label="Opacity" onChange={(e) => set(Number(e.target.value))} />
+        <input type="number" min={0} max={100} value={pct} aria-label="Opacity percent" onChange={(e) => set(Number(e.target.value))} />
+        <span className="muted">%</span>
+      </div>
+    </div>
+  );
+}
+
 function SelectField<T extends string>(props: { label: string; value: T; options: T[]; onChange: (v: T) => void }) {
   return (
     <label className="field">
@@ -195,6 +211,7 @@ export function Properties() {
               </div>
             </>
           )}
+          <OpacityField value={shape.style.opacity} onChange={(opacity) => st().styleShapes({ opacity }, 'opacity')} />
           <NumberField
             label="Rotation (°)"
             value={Math.round(rotationOf(shape) * 10) / 10}
@@ -229,6 +246,7 @@ export function Properties() {
             step={0.5}
             onChange={(strokeWidth) => st().editConnectors({ style: { strokeWidth } }, 'lineWidth')}
           />
+          <OpacityField value={line.style.opacity} onChange={(opacity) => st().editConnectors({ style: { opacity } }, 'lineOpacity')} />
           <SelectField<LineDash>
             label="Pattern"
             value={line.style.dash}

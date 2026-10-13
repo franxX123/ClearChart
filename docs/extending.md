@@ -77,8 +77,10 @@ in `docs/interactions.md` and the README.
 
 Add a function to `src/io/export.ts`. Reuse `buildSvg(page)` for anything that can derive from
 SVG (e.g. PDF via a library drawing the SVG; `buildSvg` only works for the page on the
-canvas); for data formats (e.g. CSV of shapes, Visio XML), walk each page's `order` / `items`
-directly, skipping hidden layers if the format should match what's on screen. Wire a button in `ui/Toolbar.tsx` and use
+canvas); for data formats, walk each page's `renderOrder` (visible items, paint order) —
+`io/vsdx.ts` is a worked example: geometry via `io/svgPath.ts:flattenPath`, line routes via
+`connectorPoints`, label positions via `connectors/labels.ts`, packaging via `io/zip.ts`.
+Keep the builder pure (bytes in, bytes out) so it can be tested by reading the result back. Wire a button in `ui/Toolbar.tsx` and use
 `downloadBlob` + `fileSafe(doc.title)` for the filename.
 
 ## Change the document schema

@@ -30,11 +30,12 @@ export const ShapeView = memo(function ShapeView({
 }) {
   const def = SHAPES[shape.kind];
   const st = shape.style;
+  const opacity = st.opacity != null && st.opacity < 1 ? st.opacity : undefined;
 
   if (shape.kind === 'image') {
     // The picture, then its (optional) border on top; the border path also takes the clicks.
     return (
-      <g data-hit="shape" data-id={shape.id} transform={shapeTransform(shape)}>
+      <g data-hit="shape" data-id={shape.id} transform={shapeTransform(shape)} opacity={opacity}>
         {shape.image && (
           <image href={shape.image.src} width={shape.w} height={shape.h} preserveAspectRatio="none" />
         )}
@@ -57,7 +58,7 @@ export const ShapeView = memo(function ShapeView({
   const tx = left ? box.x : box.x + box.w / 2;
 
   return (
-    <g data-hit="shape" data-id={shape.id} transform={shapeTransform(shape)}>
+    <g data-hit="shape" data-id={shape.id} transform={shapeTransform(shape)} opacity={opacity}>
       <path
         d={def.path(shape.w, shape.h)}
         fill={st.fill}

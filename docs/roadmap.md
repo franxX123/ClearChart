@@ -73,8 +73,10 @@
   Properties, conditional formatting rules, templates gallery, diagrams from text or SQL, AI
   generation.
 
-**Phase 6 — Import/export**
-- PDF export, Visio (VSDX) and draw.io import/export, embed codes, printing.
+**Phase 6 — Import/export (Visio export done)**
+- *Done:* Visio export (.vsdx, all pages, editable shapes and glued connectors, Shape Data).
+  Not carried over yet: groups, layers, line jumps; start/end labels are separate text shapes.
+- *Next:* Visio import, PDF export, draw.io import/export, embed codes, printing.
 
 Third-party integrations (Google Workspace, Microsoft 365, Atlassian, Slack, cloud-provider
 imports) are out of scope for this project.
