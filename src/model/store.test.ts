@@ -331,6 +331,47 @@ describe('templates', () => {
   });
 });
 
+describe('tools', () => {
+  it('the Place tool holds what to place; any other tool forgets it', () => {
+    load();
+    st().setPlacing({ kind: 'shape', entry: 1 });
+    expect(st()).toMatchObject({ tool: 'place', placing: { kind: 'shape', entry: 1 }, toolLocked: false });
+    st().setTool('arrow');
+    expect(st()).toMatchObject({ tool: 'arrow', placing: null });
+    st().setPlacing({ kind: 'shape', entry: 0 }, true);
+    expect(st().toolLocked).toBe(true);
+    st().setTool('select');
+    expect(st()).toMatchObject({ tool: 'select', placing: null, toolLocked: false });
+    // Picking a line template for the Arrow tool also leaves Place.
+    st().setPlacing({ kind: 'shape', entry: 0 });
+    st().setArrowTemplate(st().doc.templates!.lines[0].id);
+    expect(st()).toMatchObject({ tool: 'arrow', placing: null });
+  });
+
+  it('a shape drawn by dragging is one undo step, selected, at the drawn rect', () => {
+    load();
+    const circle = LIBRARY.find((e) => e.kind === 'circle')!;
+    const before = st().history.past.length;
+    st().beginBatch();
+    const id = st().drawShape(circle, { x: 0, y: 0, w: 10, h: 10 });
+    st().updatePage((p) => Object.assign(p.items[id], { x: 0, y: 0, w: 120, h: 120 }));
+    st().endBatch();
+    expect(st().history.past.length).toBe(before + 1);
+    expect(st().selection).toEqual([id]);
+    expect(page().items[id]).toMatchObject({ kind: 'circle', w: 120, h: 120 });
+    st().undo();
+    expect(page().items[id]).toBeUndefined();
+  });
+
+  it('deleting the element being placed puts the tool back to Select', () => {
+    load();
+    const t = st().doc.templates!.nodes[0];
+    st().setPlacing({ kind: 'template', id: t.id });
+    st().deleteTemplate(t.id);
+    expect(st()).toMatchObject({ tool: 'select', placing: null });
+  });
+});
+
 describe('groups and arranging', () => {
   it('pasted copies form their own group', () => {
     const { a, b } = load();

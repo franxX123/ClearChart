@@ -13,7 +13,12 @@ npm run build    # type-check and build to dist/
 
 ## Using it
 
-- **Add shapes:** click one in the left panel, or drag it onto the canvas.
+- **Add shapes:** click one in the left panel (or press its number), then click on the canvas to place it
+  or drag to draw it at the size you want; or drag the tile onto the canvas. The Basic section is
+  **1** Rectangle, **2** Circle (stays round when resized; Shift stretches it), **3** Triangle, **4** Text
+  (click where you want to type), **5** Image (opens the file picker) and **6** Arrow. After one shape the
+  tool returns to Select; double-click a tile to keep it on, Esc to stop. Graphs elements work the same
+  way: click one, then click on the canvas.
 - **Draw arrows:** press **A** (or the Arrow button) and drag — from empty space or from a shape. Drop the
   end on any part of a shape: near its edge it snaps onto the outline, further in it pins exactly there.
   Pinned ends follow the shape when it moves, resizes or rotates. The tool returns to Select after one arrow
@@ -43,9 +48,10 @@ npm run build    # type-check and build to dist/
 - **Rotate:** drag the round handle above a selected shape (Shift = 15° steps), or type an angle.
 - **Group / align:** select several items, then Ctrl+G (Ctrl+Shift+G ungroups), or use the Arrange buttons
   to align edges/centers and distribute evenly.
-- **Shortcuts:** Ctrl+Z / Ctrl+Shift+Z undo/redo, Ctrl+C / X / V / D, Ctrl+A, Delete, arrows to nudge
-  (Shift = 10px), Ctrl+] / Ctrl+[ for z-order, Ctrl+G / Ctrl+Shift+G to group/ungroup, A / V for the
-  Arrow / Select tool, Ctrl+S to save.
+- **Shortcuts:** Ctrl+Z / Ctrl+Shift+Z undo/redo, Ctrl+C / X / V / D, Ctrl+A, Delete (also right after
+  typing in a panel field: click the canvas first), arrows to nudge (Shift = 10px), Ctrl+] / Ctrl+[ for
+  z-order, Ctrl+G / Ctrl+Shift+G to group/ungroup, 1–6 for the Basic tools, A / V for the Arrow / Select
+  tool, Ctrl+S to save. Click a Graphs element and press Delete to remove it (Ctrl+Z brings it back).
 
 ### Importing a network from CSV
 

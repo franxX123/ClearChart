@@ -14,9 +14,9 @@ import { isConnector, isShape, shapeImageSrc } from '../model/doc';
 import { expandGroups, isVisible, layerBuckets, outerGroup } from '../model/page';
 import { currentPage, useStore, type Viewport } from '../model/store';
 import type { Endpoint, Point, Rect } from '../model/types';
-import { LIBRARY } from '../shapes/library';
+import { LIBRARY, SHAPES } from '../shapes/library';
 import { ContextMenu } from '../ui/ContextMenu';
-import { GRID, itemBounds, itemsInRect, normRect, snapToGrid, unionRects } from './geometry';
+import { drawRect, GRID, itemBounds, itemsInRect, normRect, snapToGrid, unionRects } from './geometry';
 import { ShapeView, shapeTransform } from './ShapeView';
 import { snapMove, type Guide } from './snap';
 import { TextEditor } from './TextEditor';
@@ -38,6 +38,8 @@ const ROTATE_HANDLE_OFFSET = 24;
 const ATTACH_SNAP = 8;
 /** Screen px a right-button drag must travel before it pans instead of opening the menu. */
 const PAN_THRESHOLD = 4;
+/** Screen px a Place-tool drag must travel before it draws a shape instead of placing one. */
+const DRAW_THRESHOLD = 4;
 
 type Drag =
   | {
@@ -64,7 +66,9 @@ type Drag =
   | { kind: 'rotate'; id: string; center: Point }
   | { kind: 'bend'; id: string }
   | { kind: 'marquee'; start: Point; base: string[] }
-  | { kind: 'connect'; id: string; end: 'source' | 'target'; isNew: boolean; start: Point };
+  | { kind: 'connect'; id: string; end: 'source' | 'target'; isNew: boolean; start: Point }
+  /** The Place tool: a click puts `placing` down; a drag draws a shape (`id` once it exists). */
+  | { kind: 'draw'; start: Point; id: string | null };
 
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -177,6 +181,10 @@ export function Canvas() {
     const st = useStore.getState();
     setMenu(null);
     if (st.editingId) return;
+    // Take the keyboard back from any panel field or tile, so Delete and other shortcuts act on
+    // the canvas right away (they're ignored while you're typing in a field).
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused !== document.body) focused.blur();
     svgRef.current!.setPointerCapture(e.pointerId);
     const w = toWorld(e.clientX, e.clientY);
     const pg = currentPage(st);
@@ -191,6 +199,12 @@ export function Canvas() {
         menu: e.button === 2,
         moved: e.button !== 2,
       };
+      return;
+    }
+
+    if (st.tool === 'place' && st.placing) {
+      // Wherever you press, even over other shapes: place or draw what the tool holds.
+      drag.current = { kind: 'draw', start: w, id: null };
       return;
     }
 
@@ -230,7 +244,7 @@ export function Canvas() {
         start: w,
         orig: { x: s.x, y: s.y, w: s.w, h: s.h },
         rotation: rotationOf(s),
-        aspect: s.kind === 'image',
+        aspect: !!SHAPES[s.kind].keepAspect,
       };
       return;
     }
@@ -347,7 +361,7 @@ export function Canvas() {
 
       case 'resize': {
         const g = (v: number) => (st.snapToGrid ? snapToGrid(v) : v);
-        // Pictures keep their proportions unless Shift is held (other shapes: the reverse).
+        // Pictures and circles keep their proportions unless Shift is held (other shapes: the reverse).
         const keepAspect = d.aspect !== e.shiftKey;
         const delta = { x: w.x - d.start.x, y: w.y - d.start.y };
         const r = resizeRect(d.orig, d.rotation, d.handle, delta, MIN_SIZE, g, keepAspect);
@@ -407,6 +421,28 @@ export function Canvas() {
         });
         break;
       }
+
+      case 'draw': {
+        const p = st.placing;
+        const entry = p?.kind === 'shape' ? LIBRARY[p.entry] : undefined;
+        // Only shapes are drawn to size; text boxes and Graphs elements are placed where you press.
+        if (!entry || entry.kind === 'text' || entry.kind === 'image') return;
+        if (!d.id && Math.hypot(w.x - d.start.x, w.y - d.start.y) * zoom < DRAW_THRESHOLD) return;
+        // Circles stay round unless Shift is held; Shift makes other shapes square.
+        const square = !!SHAPES[entry.kind].keepAspect !== e.shiftKey;
+        const r = drawRect(d.start, w, square, st.snapToGrid ? GRID : 0, MIN_SIZE);
+        if (!d.id) {
+          st.beginBatch();
+          d.id = st.drawShape(entry, r);
+        } else {
+          const id = d.id;
+          st.updatePage((pg) => {
+            const s = pg.items[id];
+            if (isShape(s)) Object.assign(s, r);
+          });
+        }
+        break;
+      }
     }
   };
 
@@ -447,6 +483,21 @@ export function Canvas() {
           if (d.isNew && !st.toolLocked) st.setTool('select');
         }
         setAttachHint(null);
+        break;
+      }
+      case 'draw': {
+        const p = st.placing;
+        if (d.id) {
+          st.endBatch();
+        } else if (p?.kind === 'template') {
+          // A click (or any press, for a fixed-size element): put it down there.
+          st.addFromTemplate(p.id, d.start);
+        } else if (p) {
+          const entry = LIBRARY[p.entry];
+          if (entry?.kind === 'text') st.addTextBox(d.start);
+          else if (entry && entry.kind !== 'image') st.addShape(entry, d.start);
+        }
+        if (!st.toolLocked) st.setTool('select');
         break;
       }
     }
@@ -524,7 +575,7 @@ export function Canvas() {
   return (
     <div
       ref={containerRef}
-      className={`canvas${panning ? ' panning' : ''}${tool === 'arrow' ? ' tool-arrow' : ''}`}
+      className={`canvas${panning ? ' panning' : ''}${tool === 'arrow' ? ' tool-arrow' : ''}${tool === 'place' ? ' tool-place' : ''}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >

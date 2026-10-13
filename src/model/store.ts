@@ -80,8 +80,11 @@ const PASTE_OFFSET = 20;
 /** Largest side a newly added picture is shown at, in world px. */
 const IMAGE_DISPLAY_MAX = 400;
 
-/** What a press on the canvas does: select/move things, or draw an arrow. */
-export type Tool = 'select' | 'arrow';
+/** What a press on the canvas does: select/move things, draw an arrow, or place/draw `placing`. */
+export type Tool = 'select' | 'arrow' | 'place';
+
+/** What the `place` tool puts down: a shape-panel entry (by `LIBRARY` index) or a Graphs element. */
+export type Placing = { kind: 'shape'; entry: number } | { kind: 'template'; id: string };
 const HOME_VIEW: Viewport = { x: 40, y: 20, zoom: 1 };
 
 interface State {
@@ -106,8 +109,10 @@ interface State {
   showGrid: boolean;
   snapToGrid: boolean;
   tool: Tool;
-  /** Keep the tool after drawing (otherwise it returns to select after one arrow). */
+  /** Keep the tool after drawing (otherwise it returns to select after one arrow or shape). */
   toolLocked: boolean;
+  /** What the `place` tool puts down (set with `setPlacing`); null for the other tools. */
+  placing: Placing | null;
   /** The last autosave didn't fit in browser storage (e.g. large pictures). */
   autosaveFull: boolean;
   /** Line template the Arrow tool draws with (picked from the Custom panel); null = plain arrows. */
@@ -136,8 +141,12 @@ interface State {
   toggleGrid: () => void;
   toggleSnap: () => void;
   setTool: (tool: Tool, locked?: boolean) => void;
+  /** Arms the `place` tool: the next click on the canvas places `p` (a drag draws a shape's size). */
+  setPlacing: (p: Placing, locked?: boolean) => void;
 
   addShape: (entry: LibraryEntry, center: Point) => string;
+  /** Adds a shape-panel entry exactly covering `rect` (drawn by dragging) and selects it; returns its id. */
+  drawShape: (entry: LibraryEntry, rect: Rect) => string;
   addConnector: (source: Endpoint, target: Endpoint) => string;
   /** Adds a picture (a data URL of the given pixel size) centered at `center`; returns its id. */
   addImage: (src: string, w: number, h: number, center: Point) => string;
@@ -499,6 +508,7 @@ export const useStore = create<State>()((set, get) => {
     snapToGrid: true,
     tool: 'select',
     toolLocked: false,
+    placing: null,
     autosaveFull: false,
     arrowTemplateId: null,
     clipboard: null,
@@ -567,8 +577,15 @@ export const useStore = create<State>()((set, get) => {
     toggleGrid: () => set({ showGrid: !get().showGrid }),
     toggleSnap: () => set({ snapToGrid: !get().snapToGrid }),
     // Back to Select also forgets a picked line template, so the next plain Arrow is plain.
+    // Any tool but Place forgets what Place was about to put down.
     setTool: (tool, locked = false) =>
-      set({ tool, toolLocked: tool !== 'select' && locked, ...(tool === 'select' ? { arrowTemplateId: null } : {}) }),
+      set({
+        tool,
+        toolLocked: tool !== 'select' && locked,
+        ...(tool === 'select' ? { arrowTemplateId: null } : {}),
+        ...(tool !== 'place' ? { placing: null } : {}),
+      }),
+    setPlacing: (placing, locked = false) => set({ tool: 'place', placing, toolLocked: locked, arrowTemplateId: null }),
 
     addShape: (entry, center) => {
       let x = center.x - entry.w / 2;
@@ -578,6 +595,12 @@ export const useStore = create<State>()((set, get) => {
         y = snapToGrid(y);
       }
       const shape = makeShape(entry.kind, { x, y, w: entry.w, h: entry.h }, entry.text ?? '', entry.style);
+      addToActiveLayer([shape]);
+      set({ selection: [shape.id] });
+      return shape.id;
+    },
+    drawShape: (entry, rect) => {
+      const shape = makeShape(entry.kind, rect, entry.text ?? '', entry.style);
       addToActiveLayer([shape]);
       set({ selection: [shape.id] });
       return shape.id;
@@ -1019,6 +1042,8 @@ export const useStore = create<State>()((set, get) => {
         pruneAssets(d);
       });
       if (get().arrowTemplateId === id) set({ arrowTemplateId: null });
+      const placing = get().placing;
+      if (placing?.kind === 'template' && placing.id === id) get().setTool('select');
     },
 
     addFromTemplate: (id, center) => {
@@ -1035,7 +1060,7 @@ export const useStore = create<State>()((set, get) => {
     },
 
     setArrowTemplate: (id) => {
-      if (id) set({ arrowTemplateId: id, tool: 'arrow', toolLocked: false });
+      if (id) set({ arrowTemplateId: id, tool: 'arrow', toolLocked: false, placing: null });
       else set({ arrowTemplateId: null });
     },
 

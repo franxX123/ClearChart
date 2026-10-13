@@ -23,7 +23,10 @@ in the browser (`npm run dev`).
      **Once shipped, only append** — saved connectors reference ports by index.
    - Multiple subpaths are fine (see `cylinder`, `note`), but draw every closed subpath with the
      same winding direction as the body, or the nonzero fill rule leaves unfilled holes.
-3. **`LIBRARY`** (same file) — add a sidebar entry: `{ label, category, kind, w, h, style? }`.
+3. **`LIBRARY`** (same file) — add a sidebar entry: `{ label, category, kind, w, h, style?, shortcut? }`.
+   `shortcut` is a number key that arms its draw tool (Basic uses 1–5; `ARROW_SHORTCUT` is 6);
+   keep them unique (`library.test.ts` checks). Set `keepAspect: true` on the `SHAPES` entry for
+   a kind that should keep its proportions when resized (like `circle` and `image`).
    A new `category` value also needs adding to the `LibraryEntry['category']` union; the
    sidebar groups by category automatically.
 4. TypeScript will flag `SHAPES` until the kind has an entry (it's a `Record<ShapeKind, …>`).

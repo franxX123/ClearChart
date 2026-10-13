@@ -17,6 +17,8 @@ export interface ShapeDef {
    * snap arrow ends onto the outline.
    */
   outline: (w: number, h: number) => Point[];
+  /** Resizing keeps the shape's proportions (Shift stretches it instead). */
+  keepAspect?: true;
 }
 
 const UP = { x: 0, y: -1 };
@@ -65,6 +67,13 @@ function roundRectPath(w: number, h: number, r: number) {
   );
 }
 
+const ELLIPSE: ShapeDef = {
+  path: (w, h) => `M0 ${h / 2}A${w / 2} ${h / 2} 0 1 0 ${w} ${h / 2}A${w / 2} ${h / 2} 0 1 0 0 ${h / 2}Z`,
+  ports: sidePorts,
+  textBox: (w, h) => ({ x: w * 0.15, y: h * 0.15, w: w * 0.7, h: h * 0.7 }),
+  outline: (w, h) => arc(w / 2, h / 2, w / 2, h / 2, 0, 2 * PI, 48).slice(0, -1),
+};
+
 export const SHAPES: Record<ShapeKind, ShapeDef> = {
   rect: { path: rectPath, ports: sidePorts, textBox: inset(8), outline: rectOutline },
   roundRect: {
@@ -81,12 +90,9 @@ export const SHAPES: Record<ShapeKind, ShapeDef> = {
       ];
     },
   },
-  ellipse: {
-    path: (w, h) => `M0 ${h / 2}A${w / 2} ${h / 2} 0 1 0 ${w} ${h / 2}A${w / 2} ${h / 2} 0 1 0 0 ${h / 2}Z`,
-    ports: sidePorts,
-    textBox: (w, h) => ({ x: w * 0.15, y: h * 0.15, w: w * 0.7, h: h * 0.7 }),
-    outline: (w, h) => arc(w / 2, h / 2, w / 2, h / 2, 0, 2 * PI, 48).slice(0, -1),
-  },
+  ellipse: ELLIPSE,
+  // An ellipse that stays round: resizing keeps width = height.
+  circle: { ...ELLIPSE, keepAspect: true },
   diamond: {
     path: (w, h) => `M${w / 2} 0L${w} ${h / 2}L${w / 2} ${h}L0 ${h / 2}Z`,
     ports: sidePorts,
@@ -235,7 +241,7 @@ export const SHAPES: Record<ShapeKind, ShapeDef> = {
     outline: rectOutline,
   },
   text: { path: rectPath, ports: sidePorts, textBox: inset(2), outline: rectOutline },
-  image: { path: rectPath, ports: sidePorts, textBox: inset(2), outline: rectOutline },
+  image: { path: rectPath, ports: sidePorts, textBox: inset(2), outline: rectOutline, keepAspect: true },
 };
 
 export interface LibraryEntry {
@@ -246,15 +252,18 @@ export interface LibraryEntry {
   h: number;
   text?: string;
   style?: Partial<ShapeStyle>;
+  /** Number key that arms this entry's draw tool (Basic entries). */
+  shortcut?: string;
 }
 
+/** Number key for the Arrow tool, the last tile of the Basic section (A works too). */
+export const ARROW_SHORTCUT = '6';
+
 export const LIBRARY: LibraryEntry[] = [
-  { label: 'Rectangle', category: 'Basic', kind: 'rect', w: 140, h: 70 },
-  { label: 'Rounded rectangle', category: 'Basic', kind: 'roundRect', w: 140, h: 70 },
-  { label: 'Ellipse', category: 'Basic', kind: 'ellipse', w: 120, h: 80 },
-  { label: 'Triangle', category: 'Basic', kind: 'triangle', w: 100, h: 90 },
-  { label: 'Hexagon', category: 'Basic', kind: 'hexagon', w: 130, h: 80 },
-  { label: 'Note', category: 'Basic', kind: 'note', w: 120, h: 100, style: { fill: '#fff7c2' } },
+  { label: 'Rectangle', category: 'Basic', kind: 'rect', w: 140, h: 70, shortcut: '1' },
+  { label: 'Circle', category: 'Basic', kind: 'circle', w: 80, h: 80, shortcut: '2' },
+  { label: 'Triangle', category: 'Basic', kind: 'triangle', w: 100, h: 90, shortcut: '3' },
+  // Places an auto-sized text box and starts editing it (see the canvas's draw tool).
   {
     label: 'Text',
     category: 'Basic',
@@ -263,9 +272,10 @@ export const LIBRARY: LibraryEntry[] = [
     h: 40,
     text: 'Text',
     style: { fill: 'none', stroke: 'none' },
+    shortcut: '4',
   },
   // Opens a file picker instead of adding a shape (see ui/ShapeLibrary.tsx).
-  { label: 'Image', category: 'Basic', kind: 'image', w: 160, h: 120 },
+  { label: 'Image', category: 'Basic', kind: 'image', w: 160, h: 120, shortcut: '5' },
   { label: 'Process', category: 'Flowchart', kind: 'rect', w: 140, h: 70 },
   { label: 'Decision', category: 'Flowchart', kind: 'diamond', w: 140, h: 100 },
   { label: 'Terminator', category: 'Flowchart', kind: 'terminator', w: 140, h: 50 },

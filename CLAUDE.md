@@ -38,7 +38,7 @@ npm run build      # typecheck + production build
 | `src/layout/force.ts` | Deterministic force-directed layout for imported devices |
 | `src/connectors/binding.ts` | Pinned arrow ends: snap onto a shape's outline, pinned point/direction as the shape moves |
 | `src/connectors/ConnectorView.tsx` | Line, arrowheads, label rendering |
-| `src/canvas/Canvas.tsx` | SVG canvas, all pointer interactions (tools, pan, context menu), overlay (selection/handles/guides) |
+| `src/canvas/Canvas.tsx` | SVG canvas, all pointer interactions (Select/Arrow/Place tools, pan, context menu), overlay (selection/handles/guides) |
 | `src/canvas/{geometry,snap,text}.ts` | Pure helpers: hit tests & bounds, alignment snapping, text wrap |
 | `src/canvas/transform.ts` | Rotation math (leaf module): local↔world, rotated bounds, `resizeRect`, `snapAngle` |
 | `src/canvas/arrange.ts` | Align/distribute offsets |

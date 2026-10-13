@@ -27,6 +27,27 @@ export const normRect = (a: Point, b: Point): Rect => ({
   h: Math.abs(a.y - b.y),
 });
 
+/**
+ * The rect a drag from `start` to `end` draws, in any direction: `square` makes it as wide as
+ * tall (the longer side wins), `grid` (when non-zero) snaps both corners, and neither side is
+ * shorter than `min`. The start corner stays put.
+ */
+export function drawRect(start: Point, end: Point, square: boolean, grid = 0, min = 10): Rect {
+  const snap = (v: number) => (grid ? snapToGrid(v, grid) : v);
+  const x0 = snap(start.x);
+  const y0 = snap(start.y);
+  let dx = snap(end.x) - x0;
+  let dy = snap(end.y) - y0;
+  if (square) {
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+    dx = (dx < 0 ? -1 : 1) * side;
+    dy = (dy < 0 ? -1 : 1) * side;
+  }
+  const w = Math.max(min, Math.abs(dx));
+  const h = Math.max(min, Math.abs(dy));
+  return { x: dx < 0 ? x0 - w : x0, y: dy < 0 ? y0 - h : y0, w, h };
+}
+
 export const pointInRect = (p: Point, r: Rect, pad = 0) =>
   p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
 

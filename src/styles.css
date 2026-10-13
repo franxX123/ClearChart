@@ -235,9 +235,11 @@ select:focus-visible {
 .canvas .bend-handle {
   cursor: move;
 }
-/* Arrow tool: everything on the canvas is a place to start drawing. */
+/* Arrow and Place tools: everything on the canvas is a place to start drawing. */
 .canvas.tool-arrow .canvas-svg,
-.canvas.tool-arrow [data-hit] {
+.canvas.tool-arrow [data-hit],
+.canvas.tool-place .canvas-svg,
+.canvas.tool-place [data-hit] {
   cursor: crosshair;
 }
 .canvas.panning .canvas-svg,
@@ -638,4 +640,18 @@ button.danger {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+}
+
+/* Number key of a Basic tile (it arms that tile's draw tool) */
+.shape-tile {
+  position: relative;
+}
+.shape-tile .tile-key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }

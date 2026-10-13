@@ -250,3 +250,26 @@ cases. Files from the first version are migrated (`'below'` → `'right'`) on lo
 meets it between the picture and the text, and one from the right meets the text's edge. The
 text is unwrapped, so very long values make wide devices. The Visio export glues lines to the
 shape sheet, so Visio re-routes them to the picture when shapes move there.
+
+## 28. Shape tiles and number keys arm a tool instead of adding at once
+
+**Chosen:** clicking a shape tile (or a Graphs element tile), or pressing its number (1-6 in
+the Basic section), arms a **Place** tool. A click on the canvas places the shape there, and a
+drag draws it at the dragged size. The tool returns to Select after one shape unless it was
+locked with a double-click. Dragging a tile onto the canvas still drops it directly.
+**Why:** requested (Excalidraw-style number keys). It also makes the Arrow tile behave like the
+other Basic tiles, puts shapes where you want them rather than at the view center, and lets a
+clicked Graphs tile be deleted with the Delete key without leaving a stray node behind.
+**Trade-off:** adding a shape takes two clicks instead of one. Text and Graphs elements are
+placed by a click only (their size comes from the text or the element). Image still opens the
+file picker at once and places the picture at the view center.
+
+## 29. A press on the canvas takes the keyboard back
+
+**Chosen:** a pointerdown on the canvas blurs the focused panel field or tile. The shortcut
+handler ignores keys only in fields you type into, not in sliders, color pickers or checkboxes.
+**Why:** after editing a Data field or dragging the opacity slider, Delete went to the field
+(or was ignored) instead of deleting the selection; users expect a click on the canvas to move
+the keyboard there.
+**Trade-off:** clicking the canvas ends a half-typed panel edit (its value is already saved on
+each keystroke, so nothing is lost).

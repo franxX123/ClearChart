@@ -14,6 +14,7 @@ export type ShapeKind =
   | 'rect'
   | 'roundRect'
   | 'ellipse'
+  | 'circle'
   | 'diamond'
   | 'triangle'
   | 'hexagon'

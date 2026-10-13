@@ -17,6 +17,7 @@ re-render by themselves). `Drag` is a discriminated union:
 | `rotate` | pointerdown on the `rotate` handle | angle from the shape center to the cursor (`snapAngle`: 1° steps, 15° with Shift, sticks to right angles within 3°) | `endBatch` |
 | `bend` | pointerdown on a curved line's `bend` handle | `bend` = cursor's signed distance from the chord (`bendThrough`) | `endBatch` |
 | `marquee` | pointerdown on empty canvas | selection = items fully inside the box (plus prior selection if Shift) | clear the box |
+| `draw` | any pointerdown while the **Place tool** is on (anywhere, even over shapes) | a shape entry, after 4 screen px: `beginBatch` + `drawShape`, then resize to `drawRect(start, cursor, square, grid)` (square for circles unless Shift; Shift squares other shapes) | drawn: `endBatch`; a click: `addShape` centered there, `addTextBox` for Text, `addFromTemplate` for a Graphs element; then back to Select unless locked |
 | `connect` | any pointerdown while the **Arrow tool** is on (new arrow: `beginBatch` + `addConnector` from the attachment under the cursor, or a free point), or a `cend` (existing line end) | `findAttachment` → pin the end to a shape, or leave it free at the cursor | new arrow under 8 px → `abortBatch` (a click draws nothing); otherwise `endBatch`, and the tool returns to Select unless locked |
 
 `resize` keeps the aspect ratio for pictures (`resizeRect(…, keepAspect)`); Shift inverts
@@ -194,9 +195,22 @@ clears `autoSize`, turning it into a fixed box whose text wraps.
   always zooms** around the cursor (`zoomBy(factor, screenPoint)`), including trackpad
   two-finger scrolling; `deltaMode` lines/pages are normalized, and pinch (ctrl+wheel) uses a
   faster rate. Pan with a right-button drag, a middle-button drag, or Space + left drag.
+- **Sidebar tiles arm a tool:** clicking a shape tile (or a Graphs node tile) calls
+  `setPlacing({ kind: 'shape', entry } | { kind: 'template', id })`, switching to the **Place**
+  tool (`tool: 'place'`, the tile shown `active`, crosshair cursor). Clicking it again disarms;
+  double-clicking locks the tool (`toolLocked`) for several placements. The Image tile opens
+  the file picker instead (the picture goes at the view center). The Basic section ends with an
+  **Arrow** tile that toggles the Arrow tool like the toolbar button.
 - **Drag from sidebar:** HTML5 drag-and-drop with MIME `application/x-clearchart-shape`
-  carrying the `LIBRARY` index; `onDrop` adds the shape centered at the drop point. Clicking a
-  tile adds it at the viewport center.
+  carrying the `LIBRARY` index; `onDrop` adds the shape centered at the drop point.
+- **Focus:** a press on the canvas blurs whatever panel field or tile has focus, so keyboard
+  shortcuts (Delete…) act on the canvas right away. The shortcut handler ignores keys only while
+  you're typing — text inputs, textareas, selects and editables. Sliders, color pickers and
+  checkboxes don't block shortcuts, though arrow keys still move a focused slider instead of
+  nudging.
+- **Delete on a Graphs tile:** Delete or Backspace on a focused node or line tile asks, then
+  deletes that element (`deleteTemplate`, undoable). The key stops at the tile, so the canvas
+  selection isn't deleted too.
 - **Graphs (templates):** the shape panel's Graphs section lists `Doc.templates`; new
   documents (and ones saved before templates existed) start with `defaultTemplates()` — the
   built-in device picture elements and a Link line (`model/doc.ts`). Picture elements show their
@@ -243,7 +257,8 @@ clears `autoSize`, turning it into a fixed box whose text wraps.
 | Ctrl/Cmd+] · [ | bring to front · send to back (also in the context menu) |
 | Ctrl/Cmd+= · - · 0 | zoom in · out · 100 % |
 | Shift+1 | fit to screen |
-| Delete / Backspace | delete selection (attached lines stay, detached; also in the context menu) |
+| Delete / Backspace | delete selection (attached lines stay, detached; also in the context menu); on a focused Graphs tile, delete that element |
+| 1 · 2 · 3 · 4 · 5 · 6 | Place tool: Rectangle · Circle · Triangle · Text · Image (opens the file picker) · Arrow tool (`LibraryEntry.shortcut`, `ARROW_SHORTCUT`; keypad digits too) |
 | A · V | Arrow tool · Select tool |
 | Arrows (Shift = 10 px) | nudge selection |
 | Enter | edit text of the single selected item (not pictures) |
