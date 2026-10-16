@@ -151,7 +151,14 @@ Selection is per page and is cleared when switching pages; `pruneSelection` drop
 were deleted or became hidden/locked. New items go on the active layer; if it is hidden or
 locked, it is made visible and unlocked in the same undo step.
 
-On first import the store loads `loadAutosave()` and falls back to `sampleDoc()`.
+On first import the store loads `loadAutosave()` and falls back to `emptyDoc()` (a blank diagram with
+the built-in device elements, the same as New).
+
+**Retired shape kinds.** The Flowchart shapes (`diamond`, `terminator`, `parallelogram`,
+`document`, `cylinder`, `subprocess`) were removed. `parseDoc` (`migrateRetiredKinds`) turns
+shapes and node elements of those kinds into a `roundRect` (terminator) or a `rect` (the rest).
+All of them had the four standard side ports, so lines attached by port or pinned with `at`
+stay attached.
 
 ## History (`src/model/history.ts`)
 

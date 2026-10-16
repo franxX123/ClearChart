@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { defaultTemplates } from '../model/doc';
 import { builtInAssets } from '../shapes/deviceIcons';
 import { makeLayer } from '../model/page';
-import type { Doc, Item, Layer, LineTemplate, NodeTemplate, Page, Templates } from '../model/types';
+import type { Doc, Item, Layer, LineTemplate, NodeTemplate, Page, ShapeKind, Templates } from '../model/types';
 
 const STORAGE_KEY = 'clearchart:doc';
 
@@ -77,7 +77,31 @@ export function parseDoc(json: string): Doc {
   }
   migrateDeviceFields(doc);
   migrateTextPosition(doc);
+  migrateRetiredKinds(doc);
   return doc;
+}
+
+/**
+ * Shape kinds the app no longer draws (the old Flowchart section), and what they become: the
+ * terminator a rounded rectangle, the rest a rectangle. All had the usual four side ports, so
+ * lines attached by port (or pinned with `at`) stay attached.
+ */
+const RETIRED_KINDS: Record<string, ShapeKind> = {
+  terminator: 'roundRect',
+  diamond: 'rect',
+  parallelogram: 'rect',
+  document: 'rect',
+  cylinder: 'rect',
+  subprocess: 'rect',
+};
+
+/** Turns shapes and node elements of retired kinds into their replacements (keeping text, look and lines). */
+function migrateRetiredKinds(doc: Doc): void {
+  const items: { kind?: string }[] = [
+    ...(doc.templates?.nodes ?? []),
+    ...doc.pages.flatMap((p) => p.order.map((id) => p.items[id] as { kind?: string })),
+  ];
+  for (const it of items) if (it.kind && it.kind in RETIRED_KINDS) it.kind = RETIRED_KINDS[it.kind];
 }
 
 /**

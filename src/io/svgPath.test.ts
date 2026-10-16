@@ -18,7 +18,8 @@ describe('flattenPath', () => {
   });
 
   it('keeps separate subpaths, open ones marked open', () => {
-    const paths = flattenPath(SHAPES.subprocess.path(100, 50));
+    // A box with two inner lines (open subpaths).
+    const paths = flattenPath('M0 0H100V50H0ZM10 0V50M90 0V50');
     expect(paths.map((p) => p.closed)).toEqual([true, false, false]);
     expect(paths[1].points).toEqual([
       { x: 10, y: 0 },
@@ -39,7 +40,8 @@ describe('flattenPath', () => {
   });
 
   it('flattens cubic curves through their end points', () => {
-    const [doc] = flattenPath(SHAPES.document.path(100, 80), 8);
+    // A box with a wavy bottom edge.
+    const [doc] = flattenPath('M0 0H100V72C75 56 25 88 0 72Z', 8);
     expect(doc.points[doc.points.length - 1]).toEqual({ x: 0, y: 72 });
   });
 

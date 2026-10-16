@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { addItems, DEFAULT_SHAPE_STYLE, defaultTemplates, makeConnector, makeShape, sampleDoc } from '../model/doc';
+import { addItems, DEFAULT_SHAPE_STYLE, defaultTemplates, makeConnector, makeShape } from '../model/doc';
 import { makeLayer, makePage } from '../model/page';
 import { lineFromTemplate, nodeFromTemplate } from '../model/templates';
 import type { Doc, NodeTemplate } from '../model/types';
+import { exampleDoc } from '../test/exampleDoc';
 import { buildVsdx, decodeDataUrl, visioImageExt } from './vsdx';
 import { readZip } from './zip';
 
@@ -26,7 +27,7 @@ function assertWellFormed(xml: string, name: string) {
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 function networkDoc(): Doc {
-  const doc = sampleDoc();
+  const doc = exampleDoc();
   const t = defaultTemplates();
   const box: NodeTemplate = { id: 'box', name: 'Device', kind: 'roundRect', w: 160, h: 64, style: { ...DEFAULT_SHAPE_STYLE }, text: '{hostName}\n{hostIP}' };
   const page = makePage('Network & <core>');
@@ -107,7 +108,7 @@ describe('buildVsdx', () => {
   });
 
   it('stores a picture once for all devices showing it, with their text beside them', () => {
-    const doc = sampleDoc();
+    const doc = exampleDoc();
     const sw = doc.templates!.nodes.find((n) => n.name === 'Switch')!;
     const a = nodeFromTemplate(sw, { hostName: 'sw1', hostIP: '10.0.0.1' }, { x: 600, y: 0 });
     const b = nodeFromTemplate(sw, { hostName: 'sw2' }, { x: 800, y: 0 });
@@ -140,7 +141,7 @@ describe('buildVsdx', () => {
   });
 
   it('gives an empty page a letter-size sheet', () => {
-    const doc = sampleDoc();
+    const doc = exampleDoc();
     doc.pages[0] = makePage();
     const pages = text(readZip(buildVsdx(doc)), 'visio/pages/pages.xml');
     expect(pages).toContain('<Cell N="PageWidth" V="8.5"/><Cell N="PageHeight" V="11"/>');

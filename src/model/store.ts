@@ -16,11 +16,11 @@ import {
   addItems,
   DEFAULT_SHAPE_STYLE,
   DEVICE_FIELDS_TEXT,
+  emptyDoc,
   isConnector,
   isShape,
   makeConnector,
   makeShape,
-  sampleDoc,
 } from './doc';
 import * as hist from './history';
 import {
@@ -490,7 +490,8 @@ export const useStore = create<State>()((set, get) => {
     commitPage((p) => units.forEach((u, i) => translateItems(p, u.ids, offsets[i].x, offsets[i].y)));
   };
 
-  const initialDoc = loadAutosave() ?? sampleDoc();
+  // A first launch (nothing saved yet) starts with a blank diagram, like New.
+  const initialDoc = loadAutosave() ?? emptyDoc();
   const firstPage = initialDoc.pages[0];
 
   return {

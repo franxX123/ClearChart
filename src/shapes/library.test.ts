@@ -33,4 +33,11 @@ describe('shape library', () => {
   it('keeps the kinds that left the Basic section, for existing diagrams', () => {
     for (const kind of ['roundRect', 'ellipse', 'note', 'hexagon'] as const) expect(SHAPES[kind]).toBeDefined();
   });
+
+  it('has no Flowchart section or flowchart shapes', () => {
+    expect(LIBRARY.every((e) => e.category === 'Basic')).toBe(true);
+    for (const kind of ['diamond', 'terminator', 'parallelogram', 'document', 'cylinder', 'subprocess']) {
+      expect(kind in SHAPES, kind).toBe(false);
+    }
+  });
 });

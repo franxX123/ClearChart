@@ -14,13 +14,13 @@ describe('arrow binding', () => {
     expect(nearestOnPolygon(square, { x: 8, y: 5 }).point).toEqual({ x: 10, y: 5 });
   });
 
-  it('snaps onto a diamond outline, not its bounding box', () => {
-    const d = makeShape('diamond', { x: 0, y: 0, w: 100, h: 100 });
-    // Just inside the upper-right edge, well inside the bounding box.
-    const at = bindPoint(d, { x: 74, y: 22 }, 8);
-    const p = pinnedPoint(d, at);
-    // On the edge from (50,0) to (100,50): y = x - 50.
-    expect(p.y).toBeCloseTo(p.x - 50);
+  it('snaps onto a triangle outline, not its bounding box', () => {
+    const t = makeShape('triangle', { x: 0, y: 0, w: 100, h: 100 });
+    // Just inside the right edge, well inside the bounding box.
+    const at = bindPoint(t, { x: 73, y: 50 }, 8);
+    const p = pinnedPoint(t, at);
+    // On the edge from (50,0) to (100,100): y = 2(x - 50).
+    expect(p.y).toBeCloseTo(2 * (p.x - 50));
   });
 
   it('snaps onto an ellipse outline', () => {

@@ -21,7 +21,7 @@ in the browser (`npm run dev`).
      leaves in (used by elbow routing). New arrows no longer use ports — they exist for files
      saved before the Arrow tool. Convention: indices 0–3 are top, right, bottom, left.
      **Once shipped, only append** — saved connectors reference ports by index.
-   - Multiple subpaths are fine (see `cylinder`, `note`), but draw every closed subpath with the
+   - Multiple subpaths are fine (see `note`), but draw every closed subpath with the
      same winding direction as the body, or the nonzero fill rule leaves unfilled holes.
 3. **`LIBRARY`** (same file) — add a sidebar entry: `{ label, category, kind, w, h, style?, shortcut? }`.
    `shortcut` is a number key that arms its draw tool (Basic uses 1–5; `ARROW_SHORTCUT` is 6);
@@ -94,7 +94,10 @@ Keep the builder pure (bytes in, bytes out) so it can be tested by reading the r
    `Doc.version` (types + `emptyDoc`) and add a migration in `parseDoc` that upgrades older
    versions (see the v1 → v2 page migration). Autosaved docs in users' localStorage go
    through the same `parseDoc`, so migrations cover them too.
-3. Update `sampleDoc()` and `persist.test.ts`.
+3. Update the test fixture (`src/test/exampleDoc.ts`) and `persist.test.ts`.
+4. **Removing a shape kind** breaks saved diagrams that use it, unless `parseDoc` maps it to a
+   kind that still exists. See `RETIRED_KINDS` in `io/persist.ts`, which keeps the four side
+   ports so attached lines survive.
 
 ## Testing
 
