@@ -19,9 +19,12 @@ in the browser (`npm run dev`).
      ports go after. **Once shipped, only append** — saved connectors reference ports by index.
    - Multiple subpaths are fine (see `cylinder`, `note`), but draw every closed subpath with the
      same winding direction as the body, or the nonzero fill rule leaves unfilled holes.
-3. **`LIBRARY`** (same file) — add a sidebar entry: `{ label, category, kind, w, h, style? }`.
-   A new `category` value also needs adding to the `LibraryEntry['category']` union; the
-   sidebar groups by category automatically.
+3. **`LIBRARY`** (same file) — add a sidebar entry: `{ label, category, kind, w, h, style?, shortcut? }`.
+   A new `category` value also needs adding to the `EntryBase['category']` union; the
+   sidebar groups by category automatically. `shortcut` is a digit key that places the entry
+   under the pointer (shown as a badge on the tile); keep them unique. Removing a tile is safe,
+   but keep the kind in `SHAPES` so saved diagrams still render. An entry that isn't a shape
+   (like the Arrow `LineEntry`) gets a branch in `ui/libraryActions.ts:placeEntry`.
 4. TypeScript will flag `SHAPES` until the kind has an entry (it's a `Record<ShapeKind, …>`).
 
 ## Add a style property (e.g. shape opacity)
@@ -55,6 +58,15 @@ Add a line in `src/ui/shortcuts.ts`. Use the `run(fn)` helper (it calls
 `preventDefault`). Put modifier combos inside the `if (mod)` block. Update the shortcut table
 in `docs/interactions.md` and the README.
 
+## Add a right-click menu item
+
+Add an entry to `canvasMenuItems` in `src/ui/canvasMenu.ts` (`'separator'` draws a divider):
+`{ label, shortcut?, disabled?, run }`. Compute `disabled` from `useStore.getState()` — items
+are rebuilt on every render while the menu is open. `run` is called after the menu closes;
+for a command that needs a selection and should explain itself rather than grey out, show a
+message with `showToast` from `ui/overlays.ts`. Matching keyboard shortcuts go in
+`shortcuts.ts`, and the menu label's `shortcut` should name them.
+
 ## Add a canvas interaction
 
 1. Add a variant to the `Drag` union in `Canvas.tsx`.
@@ -79,6 +91,20 @@ XML), walk `doc.order` / `doc.items` directly. Wire a button in `ui/Toolbar.tsx`
    in `parseDoc` that upgrades older versions. Autosaved docs in users' localStorage go
    through the same `parseDoc`, so migrations cover them too.
 3. Update `sampleDoc()` and `persist.test.ts`.
+
+## Graph templates and import
+
+- **New import format** (e.g. CSV of links): write a parser that returns `GraphEdge[]`
+  (`{ a, b }` string records) and feed it to `planImport` → `layoutPlan` → `importGraph`.
+  Dedupe, rules and layout come for free. Unit-test the parser next to `graph.ts`.
+- **New rule operator** (e.g. regex or prefix): extend `Rule` in `model/types.ts` with an
+  optional field, honor it in `rules.matchRule`, add it to `RuleEditor` in
+  `ui/ComponentDialog.tsx`. Old templates without the field must keep matching as before.
+- **Component parts** are ordinary `Shape` fields minus `id`/`type`/`componentId`/`data`, so
+  a new shape kind or style property works inside components automatically. Give it a
+  placeholder-friendly text box if it shows text.
+- **Layout options**: keep `forceLayout` pure and deterministic (seeded, no `Math.random`, no
+  clock); add tests in `layout.test.ts`.
 
 ## Testing
 

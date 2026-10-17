@@ -6,6 +6,55 @@ export const GRID = 10;
 
 export const snapToGrid = (v: number, grid = GRID) => Math.round(v / grid) * grid;
 
+/** Resize handle at a shape corner. */
+export type Handle = 'nw' | 'ne' | 'se' | 'sw';
+/** Smallest width or height a resize leaves. */
+export const MIN_SIZE = 10;
+
+/**
+ * Bounds of `orig` after its `handle` corner is dragged by (dx, dy). Moved edges snap to `grid`
+ * (0 = no snapping). With `keepRatio` the opposite corner stays put and the size scales
+ * uniformly, by the drag projected onto the shape's diagonal (so a circle stays a circle); the
+ * grid is ignored then, since snapping both sides would break the proportions.
+ */
+export function resizeRect(
+  orig: Rect,
+  handle: Handle,
+  dx: number,
+  dy: number,
+  { keepRatio = false, grid = 0 }: { keepRatio?: boolean; grid?: number } = {},
+): Rect {
+  const west = handle.includes('w');
+  const north = handle.includes('n');
+  if (keepRatio) {
+    const w = orig.w + (west ? -dx : dx);
+    const h = orig.h + (north ? -dy : dy);
+    const fit = (w * orig.w + h * orig.h) / (orig.w * orig.w + orig.h * orig.h);
+    const s = Math.max(fit, MIN_SIZE / Math.min(orig.w, orig.h));
+    const nw = orig.w * s;
+    const nh = orig.h * s;
+    return { x: west ? orig.x + orig.w - nw : orig.x, y: north ? orig.y + orig.h - nh : orig.y, w: nw, h: nh };
+  }
+  const g = (v: number) => (grid ? snapToGrid(v, grid) : v);
+  let left = orig.x;
+  let right = orig.x + orig.w;
+  let top = orig.y;
+  let bottom = orig.y + orig.h;
+  if (west) left = g(left + dx);
+  else right = g(right + dx);
+  if (north) top = g(top + dy);
+  else bottom = g(bottom + dy);
+  if (right - left < MIN_SIZE) {
+    if (west) left = right - MIN_SIZE;
+    else right = left + MIN_SIZE;
+  }
+  if (bottom - top < MIN_SIZE) {
+    if (north) top = bottom - MIN_SIZE;
+    else bottom = top + MIN_SIZE;
+  }
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
 export const normRect = (a: Point, b: Point): Rect => ({
   x: Math.min(a.x, b.x),
   y: Math.min(a.y, b.y),

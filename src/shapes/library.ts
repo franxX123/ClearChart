@@ -149,25 +149,43 @@ export const SHAPES: Record<ShapeKind, ShapeDef> = {
     textBox: inset(10),
   },
   text: { path: rectPath, ports: sidePorts, textBox: inset(2) },
+  image: { path: rectPath, ports: sidePorts, textBox: inset(2) },
+  // Drawn from its parts by ShapeView; the path is only the hit/selection area.
+  component: { path: rectPath, ports: sidePorts, textBox: inset(2) },
 };
 
-export interface LibraryEntry {
+interface EntryBase {
   label: string;
   category: 'Basic' | 'Flowchart';
-  kind: ShapeKind;
   w: number;
   h: number;
+  /** Digit key that places this entry (Basic shapes only). */
+  shortcut?: string;
+}
+
+export interface ShapeEntry extends EntryBase {
+  kind: ShapeKind;
   text?: string;
   style?: Partial<ShapeStyle>;
 }
 
+/** A free-standing line with an arrowhead; `w` is its length. */
+export interface LineEntry extends EntryBase {
+  kind: 'line';
+}
+
+export type LibraryEntry = ShapeEntry | LineEntry;
+
+export const isLineEntry = (e: LibraryEntry): e is LineEntry => e.kind === 'line';
+
+// Rounded rectangle, ellipse and note have no tiles any more, but their kinds stay in SHAPES so
+// saved diagrams (and graph import's fallback box) still render.
 export const LIBRARY: LibraryEntry[] = [
-  { label: 'Rectangle', category: 'Basic', kind: 'rect', w: 140, h: 70 },
-  { label: 'Rounded rectangle', category: 'Basic', kind: 'roundRect', w: 140, h: 70 },
-  { label: 'Ellipse', category: 'Basic', kind: 'ellipse', w: 120, h: 80 },
-  { label: 'Triangle', category: 'Basic', kind: 'triangle', w: 100, h: 90 },
-  { label: 'Hexagon', category: 'Basic', kind: 'hexagon', w: 130, h: 80 },
-  { label: 'Note', category: 'Basic', kind: 'note', w: 120, h: 100, style: { fill: '#fff7c2' } },
+  { label: 'Rectangle', category: 'Basic', kind: 'rect', w: 140, h: 70, shortcut: '1' },
+  // An ellipse with equal sides: dragging a corner turns it into an ellipse.
+  { label: 'Circle', category: 'Basic', kind: 'ellipse', w: 80, h: 80, shortcut: '2' },
+  { label: 'Triangle', category: 'Basic', kind: 'triangle', w: 100, h: 90, shortcut: '3' },
+  { label: 'Hexagon', category: 'Basic', kind: 'hexagon', w: 130, h: 80, shortcut: '4' },
   {
     label: 'Text',
     category: 'Basic',
@@ -176,6 +194,18 @@ export const LIBRARY: LibraryEntry[] = [
     h: 40,
     text: 'Text',
     style: { fill: 'none', stroke: 'none' },
+    shortcut: '5',
+  },
+  { label: 'Arrow', category: 'Basic', kind: 'line', w: 120, h: 0, shortcut: '6' },
+  // Placed through a file picker rather than directly (see ui/libraryActions).
+  {
+    label: 'Image',
+    category: 'Basic',
+    kind: 'image',
+    w: 80,
+    h: 80,
+    style: { fill: 'none', stroke: 'none' },
+    shortcut: '7',
   },
   { label: 'Process', category: 'Flowchart', kind: 'rect', w: 140, h: 70 },
   { label: 'Decision', category: 'Flowchart', kind: 'diamond', w: 140, h: 100 },

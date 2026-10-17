@@ -1,54 +1,39 @@
 import { isConnector, isShape } from '../model/doc';
 import { useStore } from '../model/store';
-import type { ArrowHead, LineDash, Routing } from '../model/types';
+import type { ArrowHead, LineDash, NodeComponent, Routing, Shape } from '../model/types';
+import { placeholderFields } from '../templates/rules';
+import { ColorField, NumberField, SelectField, SliderField } from './fields';
 
-/** A color input that also allows "none" (transparent). */
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const none = value === 'none';
+/** Data fields of a component instance: those its text uses, then any others it carries. */
+function DataSection({ shape, component }: { shape: Shape; component?: NodeComponent }) {
+  const st = useStore.getState;
+  const used = component ? placeholderFields(component.parts.map((p) => p.text)) : [];
+  const fields = [...new Set([...used, ...Object.keys(shape.data ?? {})])];
   return (
-    <div className="field">
-      <span>{label}</span>
-      <div className="color-row">
-        <input type="color" value={none ? '#ffffff' : value} disabled={none} onChange={(e) => onChange(e.target.value)} />
-        <label className="toggle">
-          <input type="checkbox" checked={none} onChange={(e) => onChange(e.target.checked ? 'none' : '#ffffff')} /> None
-        </label>
-      </div>
-    </div>
-  );
-}
-
-function NumberField(props: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void }) {
-  return (
-    <label className="field">
-      <span>{props.label}</span>
-      <input
-        type="number"
-        value={props.value}
-        min={props.min}
-        max={props.max}
-        step={props.step ?? 1}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          if (Number.isFinite(v)) props.onChange(Math.min(props.max, Math.max(props.min, v)));
-        }}
+    <section>
+      <h3>{component ? component.name : 'Component'}</h3>
+      {!component && <p className="muted small">This component's definition is missing from the diagram.</p>}
+      {fields.length === 0 && component && <p className="muted small">No data fields.</p>}
+      <SliderField
+        label="Opacity"
+        value={shape.style.opacity ?? 1}
+        onChange={(opacity) => st().styleComponents({ opacity }, 'componentOpacity')}
       />
-    </label>
-  );
-}
-
-function SelectField<T extends string>(props: { label: string; value: T; options: T[]; onChange: (v: T) => void }) {
-  return (
-    <label className="field">
-      <span>{props.label}</span>
-      <select value={props.value} onChange={(e) => props.onChange(e.target.value as T)}>
-        {props.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </label>
+      {fields.map((f) => (
+        <label key={f} className="field">
+          <span>
+            {f}
+            {!used.includes(f) && <span className="muted"> (not shown)</span>}
+          </span>
+          <input type="text" value={shape.data?.[f] ?? ''} onChange={(e) => st().setShapeData(shape.id, f, e.target.value)} />
+        </label>
+      ))}
+      {component && (
+        <button onClick={() => st().breakApart(shape.id)} title="Replace with its parts as ordinary shapes">
+          Break apart
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -60,19 +45,30 @@ export function Properties() {
   const st = useStore.getState;
 
   const items = selection.map((id) => doc.items[id]);
-  const shapes = items.filter(isShape);
+  // Components are styled through their template, so they get a data section instead.
+  const components = items.filter(isShape).filter((s) => s.kind === 'component');
+  const shapes = items.filter(isShape).filter((s) => s.kind !== 'component');
   const connectors = items.filter(isConnector);
   // Fields show the first selected item's values; edits apply to every selected item of that type.
   const shape = shapes[0];
   const line = connectors[0];
+  const instance = selection.length === 1 ? components[0] : undefined;
 
   return (
     <aside className="properties">
-      {!shape && !line && (
+      {instance && (
+        <DataSection
+          shape={instance}
+          component={instance.componentId ? doc.components?.[instance.componentId] : undefined}
+        />
+      )}
+
+      {!shape && !line && !instance && (
         <>
           <h3>Document</h3>
           <p className="muted">
-            {doc.order.length} item{doc.order.length === 1 ? '' : 's'}. Select a shape or line to style it.
+            {doc.order.length} item{doc.order.length === 1 ? '' : 's'}.{' '}
+            {components.length > 1 ? `${components.length} components selected.` : 'Select a shape or line to style it.'}
           </p>
         </>
       )}
@@ -81,6 +77,12 @@ export function Properties() {
         <section>
           <h3>{shapes.length > 1 ? `${shapes.length} shapes` : 'Shape'}</h3>
           <ColorField label="Fill" value={shape.style.fill} onChange={(fill) => st().styleShapes({ fill }, 'fill')} />
+          <SliderField
+            label="Fill opacity"
+            value={shape.style.fillOpacity ?? 1}
+            disabled={shape.style.fill === 'none'}
+            onChange={(fillOpacity) => st().styleShapes({ fillOpacity }, 'fillOpacity')}
+          />
           <ColorField label="Border" value={shape.style.stroke} onChange={(stroke) => st().styleShapes({ stroke }, 'stroke')} />
           <NumberField
             label="Border width"
@@ -89,6 +91,11 @@ export function Properties() {
             max={12}
             step={0.5}
             onChange={(strokeWidth) => st().styleShapes({ strokeWidth }, 'strokeWidth')}
+          />
+          <SliderField
+            label="Opacity"
+            value={shape.style.opacity ?? 1}
+            onChange={(opacity) => st().styleShapes({ opacity }, 'opacity')}
           />
           <ColorField
             label="Text color"
@@ -148,6 +155,11 @@ export function Properties() {
             step={0.5}
             onChange={(strokeWidth) => st().editConnectors({ style: { strokeWidth } }, 'lineWidth')}
           />
+          <SliderField
+            label="Opacity"
+            value={line.style.opacity ?? 1}
+            onChange={(opacity) => st().editConnectors({ style: { opacity } }, 'lineOpacity')}
+          />
           <SelectField<LineDash>
             label="Pattern"
             value={line.style.dash}
@@ -178,6 +190,22 @@ export function Properties() {
               type="text"
               value={line.label}
               onChange={(e) => st().editConnectors({ label: e.target.value }, 'label')}
+            />
+          </label>
+          <label className="field">
+            <span>Label at start</span>
+            <input
+              type="text"
+              value={line.sourceLabel ?? ''}
+              onChange={(e) => st().editConnectors({ sourceLabel: e.target.value }, 'sourceLabel')}
+            />
+          </label>
+          <label className="field">
+            <span>Label at end</span>
+            <input
+              type="text"
+              value={line.targetLabel ?? ''}
+              onChange={(e) => st().editConnectors({ targetLabel: e.target.value }, 'targetLabel')}
             />
           </label>
         </section>

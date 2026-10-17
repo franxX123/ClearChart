@@ -28,9 +28,29 @@ function anchorGuess(doc: Doc, ep: Endpoint): Point {
   return { x: s.x + s.w / 2, y: s.y + s.h / 2 };
 }
 
+/**
+ * Where the line from the shape's center toward `towards` crosses its bounding box, with the
+ * outward direction of the side it crosses (so elbow routes still leave squarely).
+ */
+export function perimeterAnchor(s: Shape, towards: Point): Anchor {
+  const cx = s.x + s.w / 2;
+  const cy = s.y + s.h / 2;
+  const dx = towards.x - cx;
+  const dy = towards.y - cy;
+  if (dx === 0 && dy === 0) return { p: { x: cx, y: s.y }, dir: { x: 0, y: -1 } };
+  const tx = dx === 0 ? Infinity : s.w / 2 / Math.abs(dx);
+  const ty = dy === 0 ? Infinity : s.h / 2 / Math.abs(dy);
+  const t = Math.min(tx, ty);
+  return {
+    p: { x: cx + dx * t, y: cy + dy * t },
+    dir: tx < ty ? { x: Math.sign(dx), y: 0 } : { x: 0, y: Math.sign(dy) },
+  };
+}
+
 export function resolveEndpoint(doc: Doc, ep: Endpoint, towards: Point): Anchor {
   const s = ep.shapeId ? doc.items[ep.shapeId] : undefined;
   if (!isShape(s)) return { p: { x: ep.x, y: ep.y }, dir: null };
+  if (ep.perimeter && ep.port == null) return perimeterAnchor(s, towards);
   const ports = shapePorts(s);
   if (ep.port != null && ports[ep.port]) return ports[ep.port];
   return ports.reduce((best, pt) => (dist2(pt.p, towards) < dist2(best.p, towards) ? pt : best));
@@ -127,6 +147,26 @@ export function polylineMidpoint(pts: Point[]): Point {
     remaining -= lens[i];
   }
   return pts[0];
+}
+
+/**
+ * Point `dist` along a polyline from its start (or its end, with `fromEnd`), with the unit
+ * direction of travel there. Clamped to the far end of the line.
+ */
+export function pointAlong(pts: Point[], dist: number, fromEnd = false): { p: Point; dir: Point } {
+  const path = fromEnd ? [...pts].reverse() : pts;
+  let remaining = Math.max(0, dist);
+  let dir = { x: 1, y: 0 };
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len === 0) continue;
+    dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    if (remaining <= len) return { p: { x: a.x + dir.x * remaining, y: a.y + dir.y * remaining }, dir };
+    remaining -= len;
+  }
+  return { p: path[path.length - 1] ?? { x: 0, y: 0 }, dir };
 }
 
 /** Finds where a dragged connector end should attach: a port, a shape body, or nowhere. */

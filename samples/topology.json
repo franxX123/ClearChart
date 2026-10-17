@@ -1,0 +1,258 @@
+[
+  [
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/1",
+      "cableType": "fiber"
+    },
+    {
+      "name": "core2",
+      "ip": "10.0.0.2",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/10",
+      "cableType": "fiber"
+    },
+    {
+      "name": "fw1",
+      "ip": "10.0.1.1",
+      "platform": "palo alto pa-3220",
+      "interface": "eth1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core2",
+      "ip": "10.0.0.2",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/10",
+      "cableType": "fiber"
+    },
+    {
+      "name": "fw2",
+      "ip": "10.0.1.2",
+      "platform": "palo alto pa-3220",
+      "interface": "eth1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "fw1",
+      "ip": "10.0.1.1",
+      "platform": "palo alto pa-3220",
+      "interface": "eth1/2",
+      "cableType": "copper"
+    },
+    {
+      "name": "rtr1",
+      "ip": "10.0.2.1",
+      "platform": "cisco 4451",
+      "interface": "Gi0/0/1",
+      "cableType": "copper"
+    }
+  ],
+  [
+    {
+      "name": "fw2",
+      "ip": "10.0.1.2",
+      "platform": "palo alto pa-3220",
+      "interface": "eth1/2",
+      "cableType": "copper"
+    },
+    {
+      "name": "rtr1",
+      "ip": "10.0.2.1",
+      "platform": "cisco 4451",
+      "interface": "Gi0/0/2",
+      "cableType": "copper"
+    }
+  ],
+  [
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/3",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a1",
+      "ip": "10.1.0.11",
+      "platform": "cisco 9300",
+      "interface": "Te1/1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core2",
+      "ip": "10.0.0.2",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/3",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a1",
+      "ip": "10.1.0.11",
+      "platform": "cisco 9300",
+      "interface": "Te1/1/2",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/4",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a2",
+      "ip": "10.1.0.12",
+      "platform": "cisco 9300",
+      "interface": "Te1/1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core2",
+      "ip": "10.0.0.2",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/4",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a2",
+      "ip": "10.1.0.12",
+      "platform": "cisco 9300",
+      "interface": "Te1/1/2",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/5",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a3",
+      "ip": "10.1.0.13",
+      "platform": "cisco 9200",
+      "interface": "Te1/1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "core2",
+      "ip": "10.0.0.2",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/5",
+      "cableType": "fiber"
+    },
+    {
+      "name": "sw-a4",
+      "ip": "10.1.0.14",
+      "platform": "cisco 9200",
+      "interface": "Te1/1/1",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "sw-a1",
+      "ip": "10.1.0.11",
+      "platform": "cisco 9300",
+      "interface": "Gi1/0/10",
+      "cableType": "copper"
+    },
+    {
+      "name": "ap1",
+      "ip": "10.1.10.21",
+      "platform": "cisco 9120",
+      "interface": "eth0",
+      "cableType": "copper"
+    }
+  ],
+  [
+    {
+      "name": "sw-a2",
+      "ip": "10.1.0.12",
+      "platform": "cisco 9300",
+      "interface": "Gi1/0/10",
+      "cableType": "copper"
+    },
+    {
+      "name": "ap2",
+      "ip": "10.1.10.22",
+      "platform": "cisco 9120",
+      "interface": "eth0",
+      "cableType": "copper"
+    }
+  ],
+  [
+    {
+      "name": "sw-a3",
+      "ip": "10.1.0.13",
+      "platform": "cisco 9200",
+      "interface": "Gi1/0/24",
+      "cableType": "copper"
+    },
+    {
+      "name": "srv1",
+      "ip": "10.1.20.5",
+      "platform": "linux",
+      "interface": "eno1",
+      "cableType": "copper"
+    }
+  ],
+  [
+    {
+      "name": "sw-a1",
+      "ip": "10.1.0.11",
+      "platform": "cisco 9300",
+      "interface": "Te1/1/1",
+      "cableType": "fiber"
+    },
+    {
+      "name": "core1",
+      "ip": "10.0.0.1",
+      "platform": "cisco 9500",
+      "interface": "Te1/0/3",
+      "cableType": "fiber"
+    }
+  ],
+  [
+    {
+      "name": "sw-a3",
+      "ip": "10.1.0.13",
+      "platform": "cisco 9200",
+      "interface": "Gi1/0/48",
+      "cableType": "copper"
+    },
+    {
+      "name": "sw-a4",
+      "ip": "10.1.0.14",
+      "platform": "cisco 9200",
+      "interface": "Gi1/0/48",
+      "cableType": "copper"
+    }
+  ]
+]
