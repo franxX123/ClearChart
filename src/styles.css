@@ -241,6 +241,41 @@ select:focus-visible {
   width: 240px;
   border-left: 1px solid var(--border);
 }
+.sidebar.collapsed,
+.properties.collapsed {
+  width: 28px;
+  padding: 8px 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.panel-head .search {
+  flex: 1;
+  min-width: 0;
+}
+.panel-toggle {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.panel-toggle:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.properties .panel-head + h3,
+.properties .panel-head + section > h3:first-child {
+  margin-top: 0;
+}
 .sidebar h3,
 .properties h3 {
   font-size: 11px;
@@ -377,16 +412,16 @@ select:focus-visible {
   stroke: #e5398f;
   pointer-events: none;
 }
+/* Shape text is edited in place: no box, just the text and caret. */
 .text-editor {
   position: absolute;
   z-index: 2;
   resize: none;
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  background: transparent;
   text-align: center;
   line-height: 1.25;
-  padding: 2px;
+  padding: 0;
   outline: none;
   overflow: hidden;
 }

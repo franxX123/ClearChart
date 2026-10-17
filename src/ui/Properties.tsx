@@ -3,6 +3,8 @@ import { useStore } from '../model/store';
 import type { ArrowHead, LineDash, NodeComponent, Routing, Shape } from '../model/types';
 import { placeholderFields } from '../templates/rules';
 import { ColorField, NumberField, SelectField, SliderField } from './fields';
+import { useOverlays } from './overlays';
+import { PanelToggle } from './PanelToggle';
 
 /** Data fields of a component instance: those its text uses, then any others it carries. */
 function DataSection({ shape, component }: { shape: Shape; component?: NodeComponent }) {
@@ -42,7 +44,16 @@ const ARROWS: ArrowHead[] = ['none', 'arrow', 'open'];
 export function Properties() {
   const doc = useStore((s) => s.doc);
   const selection = useStore((s) => s.selection);
+  const open = useOverlays((s) => s.panels.right);
   const st = useStore.getState;
+
+  if (!open) {
+    return (
+      <aside className="properties collapsed">
+        <PanelToggle side="right" label="properties" />
+      </aside>
+    );
+  }
 
   const items = selection.map((id) => doc.items[id]);
   // Components are styled through their template, so they get a data section instead.
@@ -56,6 +67,9 @@ export function Properties() {
 
   return (
     <aside className="properties">
+      <div className="panel-head">
+        <PanelToggle side="right" label="properties" />
+      </div>
       {instance && (
         <DataSection
           shape={instance}

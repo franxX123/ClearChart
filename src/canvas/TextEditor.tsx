@@ -3,7 +3,7 @@ import { connectorPoints, polylineMidpoint } from '../connectors/routing';
 import { isConnector, isShape } from '../model/doc';
 import { useStore } from '../model/store';
 import { SHAPES } from '../shapes/library';
-import { FONT_FAMILY } from './text';
+import { cssFont, FONT_FAMILY, LINE_HEIGHT, wrapText } from './text';
 
 /** Textarea laid over a shape (or a connector's label) while its text is edited. */
 export function TextEditor({ id }: { id: string }) {
@@ -37,11 +37,16 @@ export function TextEditor({ id }: { id: string }) {
   if (isShape(item)) {
     const box = SHAPES[item.kind].textBox(item.w, item.h);
     const st = item.style;
+    // Center the lines vertically the way ShapeView draws them, so the text doesn't move when
+    // editing starts. The zero-width space keeps a trailing empty line (just after Enter) counted.
+    const lines = Math.max(1, wrapText(value + '​', box.w, cssFont(st.fontSize, st.bold, st.italic), st.fontSize).length);
+    const padTop = Math.max(0, (box.h - lines * st.fontSize * LINE_HEIGHT) / 2);
     style = {
       left: vp.x + (item.x + box.x) * vp.zoom,
       top: vp.y + (item.y + box.y) * vp.zoom,
       width: box.w * vp.zoom,
       height: box.h * vp.zoom,
+      paddingTop: padTop * vp.zoom,
       fontSize: st.fontSize * vp.zoom,
       fontWeight: st.bold ? 'bold' : 'normal',
       fontStyle: st.italic ? 'italic' : 'normal',
@@ -55,7 +60,11 @@ export function TextEditor({ id }: { id: string }) {
       width: 160,
       height: 28,
       fontSize: 12 * vp.zoom,
+      // A label sits on its line, so it keeps a box to stay readable.
       background: '#ffffff',
+      border: '1px solid var(--accent)',
+      borderRadius: 2,
+      padding: 2,
     };
   }
 

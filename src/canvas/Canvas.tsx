@@ -125,10 +125,19 @@ export function Canvas() {
     };
   }, []);
 
-  // Track canvas size for zoom-to-fit and zooming around the center.
+  // Track canvas size for zoom-to-fit and zooming around the center. When the canvas's left
+  // edge moves (the shape library collapsing or expanding), pan by the same amount so the
+  // diagram stays where it was on screen.
   useEffect(() => {
     const el = containerRef.current!;
-    const ro = new ResizeObserver(() => useStore.getState().setCanvasSize(el.clientWidth, el.clientHeight));
+    let left = el.getBoundingClientRect().left;
+    const ro = new ResizeObserver(() => {
+      const st = useStore.getState();
+      const newLeft = el.getBoundingClientRect().left;
+      if (newLeft !== left) st.setViewport({ ...st.viewport, x: st.viewport.x + left - newLeft });
+      left = newLeft;
+      st.setCanvasSize(el.clientWidth, el.clientHeight);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);

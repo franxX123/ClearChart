@@ -36,7 +36,7 @@ npm run build      # typecheck + production build
 | `src/ui/` | Toolbar, tab bar, shape library sidebar, properties panel, keyboard shortcuts |
 | `src/ui/ContextMenu.tsx`, `canvasMenu.ts` | Right-click menu component; the canvas menu's items |
 | `src/ui/libraryActions.ts` | `placeEntry`: puts a sidebar entry (shape, Arrow line, image) on the canvas; digit-key lookup |
-| `src/ui/overlays.ts`, `Overlays.tsx` | Small UI store + host: component dialogs, toast messages, selection checks |
+| `src/ui/overlays.ts`, `OverlayHost.tsx` | Small UI store + host: component dialogs, toast messages, selection checks |
 | `src/io/` | JSON file save/open, per-tab localStorage autosave, SVG/PNG export, image file reading |
 | `src/templates/types.ts`, `rules.ts` | Graph template types; rule matching, `{{field}}` placeholders, selection → component parts |
 | `src/templates/graph.ts` | Edge-list parsing (`parseGraph`), import planning/dedupe (`planImport`), `layoutPlan` |

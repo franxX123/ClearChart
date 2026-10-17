@@ -11,9 +11,15 @@ export interface DialogRequest {
 }
 
 const LAST_TEMPLATE_KEY = 'clearchart:lastTemplate';
+const PANELS_KEY = 'clearchart:panels';
 const TOAST_MS = 3500;
 
-/** UI state that isn't part of any document: the open component dialog and the toast message. */
+export type PanelSide = 'left' | 'right';
+
+/**
+ * UI state that isn't part of any document: the open component dialog, the toast message and
+ * which side panels are open.
+ */
 interface OverlaysState {
   dialog: DialogRequest | null;
   toast: { id: number; text: string } | null;
@@ -24,6 +30,9 @@ interface OverlaysState {
   showToast: (text: string) => void;
   hideToast: () => void;
   setLastTemplate: (id: string) => void;
+  /** Shape library (left) and Properties (right); remembered across reloads. */
+  panels: Record<PanelSide, boolean>;
+  togglePanel: (side: PanelSide) => void;
 }
 
 const readLast = () => {
@@ -32,6 +41,18 @@ const readLast = () => {
   } catch {
     return null;
   }
+};
+
+const readPanels = (): Record<PanelSide, boolean> => {
+  const panels = { left: true, right: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}');
+    if (saved.left === false) panels.left = false;
+    if (saved.right === false) panels.right = false;
+  } catch {
+    // Missing or unreadable: both open.
+  }
+  return panels;
 };
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -59,6 +80,17 @@ export const useOverlays = create<OverlaysState>()((set) => ({
     }
     set({ lastTemplateId: id });
   },
+  panels: readPanels(),
+  togglePanel: (side) =>
+    set((s) => {
+      const panels = { ...s.panels, [side]: !s.panels[side] };
+      try {
+        localStorage.setItem(PANELS_KEY, JSON.stringify(panels));
+      } catch {
+        // A layout preference; fine to lose.
+      }
+      return { panels };
+    }),
 }));
 
 export const showToast = (text: string) => useOverlays.getState().showToast(text);

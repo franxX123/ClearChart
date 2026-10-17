@@ -3,6 +3,8 @@ import { SHAPE_DRAG_MIME } from '../canvas/Canvas';
 import { viewCenter } from '../model/store';
 import { isLineEntry, LIBRARY, SHAPES, type LibraryEntry } from '../shapes/library';
 import { placeEntry } from './libraryActions';
+import { useOverlays } from './overlays';
+import { PanelToggle } from './PanelToggle';
 import { TemplateLibrary } from './TemplateLibrary';
 
 function Thumb({ entry }: { entry: LibraryEntry }) {
@@ -46,6 +48,7 @@ function Thumb({ entry }: { entry: LibraryEntry }) {
 
 export function ShapeLibrary() {
   const [query, setQuery] = useState('');
+  const open = useOverlays((s) => s.panels.left);
   const q = query.trim().toLowerCase();
   const entries = LIBRARY.map((entry, idx) => ({ entry, idx })).filter(({ entry }) => entry.label.toLowerCase().includes(q));
   const categories = [...new Set(entries.map((e) => e.entry.category))];
@@ -57,15 +60,26 @@ export function ShapeLibrary() {
     return `${entry.label}${key} — click or drag onto the canvas`;
   };
 
+  if (!open) {
+    return (
+      <aside className="sidebar collapsed">
+        <PanelToggle side="left" label="shapes" />
+      </aside>
+    );
+  }
+
   return (
     <aside className="sidebar">
-      <input
-        className="search"
-        type="search"
-        placeholder="Search shapes"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="panel-head">
+        <input
+          className="search"
+          type="search"
+          placeholder="Search shapes"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <PanelToggle side="left" label="shapes" />
+      </div>
       {categories.map((cat) => (
         <section key={cat}>
           <h3>{cat}</h3>

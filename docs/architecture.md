@@ -31,7 +31,7 @@ Graph templates add `src/templates/`: pure `rules`, `graph` (parse + plan an imp
 
 Not shown: `ui/TabBar` (one tab per open diagram, along the bottom of the canvas),
 `ui/libraryActions` (places a sidebar entry: shape, line or image), `ui/ContextMenu` + `ui/canvasMenu` (the
-canvas right-click menu), `ui/overlays` + `ui/Overlays` (a small UI store and host for the
+canvas right-click menu), `ui/overlays` + `ui/OverlayHost` (a small UI store and host for the
 component dialogs and toast messages), and the pure helpers `model/groups` and `canvas/wheel`.
 
 `io/export.ts` imports `canvasRefs` from `Canvas.tsx` — the one place non-UI code reaches into
@@ -128,9 +128,12 @@ On first import the store loads `loadWorkspace()` (all autosaved tabs) and falls
 with `sampleDoc()`.
 
 UI state that isn't part of a document (the open component dialog, the toast message, the last
-template used) lives in a third small store, `useOverlays` in `ui/overlays.ts`, rendered by
-`<Overlays/>` in `App.tsx`. `startNodeComponent`/`startLineComponent` there check the selection
-and either open the dialog or show a toast.
+template used, which side panels are open) lives in a third small store, `useOverlays` in
+`ui/overlays.ts`, rendered by `<Overlays/>` in `App.tsx`. `startNodeComponent`/`startLineComponent`
+there check the selection and either open the dialog or show a toast. The shape library and
+Properties panel collapse to a thin rail via `ui/PanelToggle`; their open state is saved in
+localStorage (`clearchart:panels`), and `Canvas` pans by the change in its left edge so the
+diagram doesn't jump when the library opens or closes.
 
 ## History (`src/model/history.ts`)
 

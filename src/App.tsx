@@ -3,7 +3,7 @@ import { Canvas } from './canvas/Canvas';
 import { hasTabDoc, removeTabDoc, saveTabDoc, saveTabIndex } from './io/persist';
 import type { Doc } from './model/types';
 import { useStore } from './model/store';
-import { Overlays } from './ui/Overlays';
+import { Overlays } from './ui/OverlayHost';
 import { Properties } from './ui/Properties';
 import { ShapeLibrary } from './ui/ShapeLibrary';
 import { useShortcuts } from './ui/shortcuts';
